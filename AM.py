@@ -5,25 +5,23 @@ import bcrypt
 import uuid
 from datetime import datetime
 import json
-import os
 
 # =========================================================
-# Google Sheets 接続（JSONファイルを直接読み込む）
+# Google Sheets 接続（Secrets の JSON を読み込む）
 # =========================================================
 def get_sheet():
-    # JSON キーのファイル名（GitHub にアップした名前）
-    json_path = "asset-manager-500108-fbfdacc57942.json"
+    # Secrets から JSON を取得
+    creds_json = st.secrets["gcp_service_account"]["json"]
 
-    # JSON を読み込む
-    with open(json_path, "r") as f:
-        creds_info = json.load(f)
+    # JSON 文字列 → dict に変換
+    creds_info = json.loads(creds_json)
 
     scopes = ["https://www.googleapis.com/auth/spreadsheets"]
     creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
 
     client = gspread.authorize(creds)
 
-    # スプレッドシートIDは Secrets から読み込む（これは短いので壊れにくい）
+    # スプレッドシートID
     sheet_id = st.secrets["sheet_id"]
 
     sheet = client.open_by_key(sheet_id).sheet1
