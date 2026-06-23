@@ -29,7 +29,7 @@ def save_cache(cache):
 def build_msal_app(cache=None):
     return msal.ConfidentialClientApplication(
         CLIENT_ID,
-        authority=f"https://login.microsoftonline.com/{TENANT_ID}",
+        authority="https://login.microsoftonline.com/consumers",
         client_credential=CLIENT_SECRET,
         token_cache=cache,
     )
