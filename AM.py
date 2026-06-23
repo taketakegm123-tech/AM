@@ -12,10 +12,7 @@ CLIENT_SECRET = st.secrets["azure"]["client_secret"]
 TENANT_ID = st.secrets["azure"]["tenant_id"]
 REDIRECT_URI = st.secrets["onedrive"]["redirect_uri"]
 
-# OneDrive 上のファイルパス
 FILE_PATH = "Asset_Manager/assets.xlsx"
-
-# スコープ（MSA は Files.ReadWrite のみ）
 SCOPE = ["Files.ReadWrite"]
 
 # ============================
@@ -41,21 +38,23 @@ def get_token():
     cache = load_cache()
     app = build_msal_app(cache)
 
-    # 既存トークンがあれば再利用
+    # 既存トークン
     accounts = app.get_accounts()
     if accounts:
         result = app.acquire_token_silent(SCOPE, account=accounts[0])
         if result and "access_token" in result:
             return result["access_token"]
 
-    # 初回認証
+    # 初回ログイン
     auth_url = app.get_authorization_request_url(SCOPE, redirect_uri=REDIRECT_URI)
     st.markdown(f"[ここをクリックして Microsoft にログインする]({auth_url})")
 
-    # Streamlit の確実に動くクエリ取得
-    query_params = st.experimental_get_query_params()
+    # Streamlit 全バージョン対応のクエリ取得
+    raw_params = st.query_params
+    query_params = dict(raw_params)
+
     if "code" in query_params:
-        code = query_params["code"][0]
+        code = query_params["code"]
 
         result = app.acquire_token_by_authorization_code(
             code,
@@ -69,7 +68,7 @@ def get_token():
     return None
 
 # ============================
-# 3. Excel 読み込み／書き込み（複数シート対応）
+# 3. Excel 読み込み／書き込み
 # ============================
 def read_workbook_from_onedrive(access_token, file_path):
     url = f"https://graph.microsoft.com/v1.0/me/drive/root:/{file_path}:/content"
@@ -108,7 +107,7 @@ def write_workbook_to_onedrive(access_token, file_path, sheets_dict):
         return False
 
 # ============================
-# 4. Streamlit UI
+# 4. UI
 # ============================
 st.title("クラウド資産管理アプリ（OneDrive 連携版）")
 
@@ -125,7 +124,6 @@ sheets = read_workbook_from_onedrive(token, FILE_PATH)
 if sheets is None:
     st.stop()
 
-# シート選択
 sheet_names = list(sheets.keys())
 selected_sheet = st.selectbox("編集するシートを選択", sheet_names)
 
@@ -133,9 +131,6 @@ df = sheets[selected_sheet]
 st.subheader(f"現在のデータ（{selected_sheet}）")
 st.dataframe(df)
 
-# ============================
-# 仕訳追加フォーム
-# ============================
 st.subheader("新しい仕訳を追加")
 
 col1, col2 = st.columns(2)
@@ -155,7 +150,6 @@ if st.button("このシートに行を追加して保存"):
         "メモ": memo,
     }
 
-    # 既存列に合わせて不足分は追加
     for col in df.columns:
         if col not in new_row:
             new_row[col] = None
