@@ -13,7 +13,7 @@ TENANT_ID = st.secrets["azure"]["tenant_id"]
 REDIRECT_URI = st.secrets["onedrive"]["redirect_uri"]
 
 # Microsoft Graph のスコープ
-SCOPE = ["Files.ReadWrite", "offline_access"]
+SCOPE = ["Files.ReadWrite"]
 
 # ============================
 # 2. 認証用の MSAL オブジェクト
