@@ -1,180 +1,99 @@
 import streamlit as st
-import gspread
-from google.oauth2.service_account import Credentials
-import bcrypt
-import uuid
-from datetime import datetime
+import msal
+import requests
+import pandas as pd
 import json
 
-# =========================================================
-# Google Sheets 接続（Secrets の JSON を読み込む）
-# =========================================================
-def get_sheet():
-    # Secrets から JSON を取得
-    creds_json = st.secrets["gcp_service_account"]["json"]
+# ============================
+# 1. Streamlit Secrets 読み込み
+# ============================
+CLIENT_ID = st.secrets["azure"]["client_id"]
+CLIENT_SECRET = st.secrets["azure"]["client_secret"]
+TENANT_ID = st.secrets["azure"]["tenant_id"]
+REDIRECT_URI = st.secrets["onedrive"]["redirect_uri"]
 
-    # JSON 文字列 → dict に変換
-    creds_info = json.loads(creds_json)
+# Microsoft Graph のスコープ
+SCOPE = ["Files.ReadWrite", "User.Read", "offline_access"]
 
-    scopes = ["https://www.googleapis.com/auth/spreadsheets"]
-    creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
+# ============================
+# 2. 認証用の MSAL オブジェクト
+# ============================
+def load_cache():
+    if "token_cache" not in st.session_state:
+        st.session_state["token_cache"] = msal.SerializableTokenCache()
+    return st.session_state["token_cache"]
 
-    client = gspread.authorize(creds)
+def save_cache(cache):
+    st.session_state["token_cache"] = cache
 
-    # スプレッドシートID
-    sheet_id = st.secrets["sheet_id"]
-
-    sheet = client.open_by_key(sheet_id).sheet1
-    return sheet
-
-# =========================================================
-# パスワード管理（session_state に保持）
-# =========================================================
-def load_passwords():
-    if "passwords" not in st.session_state:
-        st.session_state["passwords"] = {
-            "YT": bcrypt.hashpw("PW123".encode(), bcrypt.gensalt()).decode(),
-            "Guest": bcrypt.hashpw("PW12345".encode(), bcrypt.gensalt()).decode()
-        }
-    return st.session_state["passwords"]
-
-def save_passwords(passwords):
-    st.session_state["passwords"] = passwords
-
-# =========================================================
-# 家計簿データ読み込み
-# =========================================================
-def load_kakeibo():
-    sheet = get_sheet()
-    rows = sheet.get_all_records()
-    return rows
-
-# =========================================================
-# 家計簿データ保存（1行追加）
-# =========================================================
-def save_kakeibo_row(row):
-    sheet = get_sheet()
-    sheet.append_row(row)
-
-# =========================================================
-# ログイン画面
-# =========================================================
-def login_screen():
-    st.title("🔐 ログイン")
-
-    username = st.text_input("ユーザー名")
-    password = st.text_input("パスワード", type="password")
-
-    if st.button("ログイン"):
-        passwords = load_passwords()
-
-        if username in passwords:
-            hashed = passwords[username].encode()
-            if bcrypt.checkpw(password.encode(), hashed):
-                st.session_state["user"] = username
-                st.session_state["page"] = "main"
-                st.rerun()
-            else:
-                st.error("パスワードが違います")
-        else:
-            st.error("ユーザー名が存在しません")
-
-# =========================================================
-# パスワード変更画面
-# =========================================================
-def change_password_screen():
-    st.title("🔑 パスワード変更")
-
-    old_pw = st.text_input("現在のパスワード", type="password")
-    new_pw = st.text_input("新しいパスワード", type="password")
-
-    if st.button("変更する"):
-        passwords = load_passwords()
-        username = st.session_state["user"]
-
-        if bcrypt.checkpw(old_pw.encode(), passwords[username].encode()):
-            passwords[username] = bcrypt.hashpw(new_pw.encode(), bcrypt.gensalt()).decode()
-            save_passwords(passwords)
-            st.success("パスワードを変更しました")
-            st.session_state["page"] = "main"
-            st.rerun()
-        else:
-            st.error("現在のパスワードが違います")
-
-# =========================================================
-# 家計簿入力画面
-# =========================================================
-def kakeibo_input_screen():
-    st.title("📘 家計簿入力")
-
-    date = st.date_input("日付", datetime.now())
-    category = st.selectbox("カテゴリ", ["食費", "交通費", "日用品", "収入", "その他"])
-    amount = st.number_input("金額", step=100, format="%d")
-    memo = st.text_input("メモ（任意）")
-
-    if st.button("追加"):
-        row = [
-            str(uuid.uuid4()),
-            str(date),
-            category,
-            int(amount),
-            memo
-        ]
-        save_kakeibo_row(row)
-        st.success("追加しました！")
-
-# =========================================================
-# 家計簿一覧画面
-# =========================================================
-def kakeibo_list_screen():
-    st.title("📄 家計簿一覧")
-
-    data = load_kakeibo()
-    if not data:
-        st.info("まだデータがありません")
-        return
-
-    st.table(data)
-
-# =========================================================
-# ページ描画
-# =========================================================
-def render_page():
-    page = st.session_state.get("page", "login")
-
-    if page == "login":
-        login_screen()
-    elif page == "main":
-        kakeibo_input_screen()
-    elif page == "list":
-        kakeibo_list_screen()
-    elif page == "change_pw":
-        change_password_screen()
-
-# =========================================================
-# メニュー（常時表示）
-# =========================================================
-if "user" in st.session_state:
-    menu = st.sidebar.radio(
-        "メニュー",
-        ["家計簿入力", "家計簿一覧", "パスワード変更", "ログアウト"]
+def build_msal_app(cache=None):
+    return msal.ConfidentialClientApplication(
+        CLIENT_ID,
+        authority=f"https://login.microsoftonline.com/{TENANT_ID}",
+        client_credential=CLIENT_SECRET,
+        token_cache=cache
     )
 
-    if menu == "家計簿入力":
-        st.session_state["page"] = "main"
-        st.rerun()
-    elif menu == "家計簿一覧":
-        st.session_state["page"] = "list"
-        st.rerun()
-    elif menu == "パスワード変更":
-        st.session_state["page"] = "change_pw"
-        st.rerun()
-    elif menu == "ログアウト":
-        st.session_state.clear()
-        st.session_state["page"] = "login"
-        st.rerun()
+# ============================
+# 3. 認証フロー
+# ============================
+def get_token():
+    cache = load_cache()
+    app = build_msal_app(cache)
 
-# =========================================================
-# ページ描画
-# =========================================================
-render_page()
+    # 既存トークンがあれば使う
+    accounts = app.get_accounts()
+    if accounts:
+        result = app.acquire_token_silent(SCOPE, account=accounts[0])
+        if result:
+            return result["access_token"]
+
+    # 初回ログイン
+    auth_url = app.get_authorization_request_url(SCOPE, redirect_uri=REDIRECT_URI)
+    st.markdown(f"[ここをクリックして Microsoft にログインする]({auth_url})")
+
+    # 認証後のコードを受け取る
+    query_params = st.query_params
+    if "code" in query_params:
+        code = query_params["code"]
+        result = app.acquire_token_by_authorization_code(
+            code,
+            scopes=SCOPE,
+            redirect_uri=REDIRECT_URI
+        )
+        if "access_token" in result:
+            save_cache(cache)
+            return result["access_token"]
+
+    return None
+
+# ============================
+# 4. OneDrive の Excel を読み込む関数
+# ============================
+def read_excel_from_onedrive(access_token, file_path):
+    url = f"https://graph.microsoft.com/v1.0/me/drive/root:/{file_path}:/content"
+    headers = {"Authorization": f"Bearer {access_token}"}
+    response = requests.get(url, headers=headers)
+
+    if response.status_code == 200:
+        return pd.read_excel(response.content)
+    else:
+        st.error("ファイル取得に失敗しました")
+        st.write(response.text)
+        return None
+
+# ============================
+# 5. Streamlit UI
+# ============================
+st.title("OneDrive Excel 読み込みテスト")
+
+token = get_token()
+
+if token:
+    st.success("ログイン成功！Excel を読み込みます。")
+
+    df = read_excel_from_onedrive(token, "Asset_Manager/assets.xlsx")  # ← OneDrive のパス
+    if df is not None:
+        st.dataframe(df)
+else:
+    st.info("ログインしてください。")

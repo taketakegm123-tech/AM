@@ -1,4 +1,5 @@
 streamlit
-gspread
-google-auth
-bcrypt
+msal
+requests
+pandas
+openpyxl
