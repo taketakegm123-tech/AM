@@ -12,10 +12,10 @@ CLIENT_SECRET = st.secrets["azure"]["client_secret"]
 TENANT_ID = st.secrets["azure"]["tenant_id"]
 REDIRECT_URI = st.secrets["onedrive"]["redirect_uri"]
 
-# OneDrive 上のファイルパス（必要に応じて変更）
+# OneDrive 上のファイルパス
 FILE_PATH = "Asset_Manager/assets.xlsx"
 
-# スコープ（MSA 用は Files.ReadWrite のみ）
+# スコープ（MSA は Files.ReadWrite のみ）
 SCOPE = ["Files.ReadWrite"]
 
 # ============================
@@ -52,9 +52,11 @@ def get_token():
     auth_url = app.get_authorization_request_url(SCOPE, redirect_uri=REDIRECT_URI)
     st.markdown(f"[ここをクリックして Microsoft にログインする]({auth_url})")
 
-    query_params = st.query_params
+    # Streamlit の確実に動くクエリ取得
+    query_params = st.experimental_get_query_params()
     if "code" in query_params:
-        code = query_params["code"]
+        code = query_params["code"][0]
+
         result = app.acquire_token_by_authorization_code(
             code,
             scopes=SCOPE,
@@ -76,7 +78,6 @@ def read_workbook_from_onedrive(access_token, file_path):
 
     if response.status_code == 200:
         bio = io.BytesIO(response.content)
-        # sheet_name=None で全シート取得（dict: {sheet_name: DataFrame}）
         sheets = pd.read_excel(bio, sheet_name=None)
         return sheets
     else:
@@ -124,7 +125,7 @@ sheets = read_workbook_from_onedrive(token, FILE_PATH)
 if sheets is None:
     st.stop()
 
-# シート選択（仕訳用シートを想定）
+# シート選択
 sheet_names = list(sheets.keys())
 selected_sheet = st.selectbox("編集するシートを選択", sheet_names)
 
@@ -132,6 +133,9 @@ df = sheets[selected_sheet]
 st.subheader(f"現在のデータ（{selected_sheet}）")
 st.dataframe(df)
 
+# ============================
+# 仕訳追加フォーム
+# ============================
 st.subheader("新しい仕訳を追加")
 
 col1, col2 = st.columns(2)
