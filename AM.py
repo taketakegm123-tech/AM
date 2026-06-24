@@ -39,14 +39,12 @@ def get_token(show_login_ui=True):
     cache = load_cache()
     app = build_msal_app(cache)
 
-    # 既存トークン
     accounts = app.get_accounts()
     if accounts:
         result = app.acquire_token_silent(SCOPE, account=accounts[0])
         if result and "access_token" in result:
             return result["access_token"]
 
-    # クエリパラメータから code を取得
     raw_params = st.query_params
     query_params = dict(raw_params)
 
@@ -61,7 +59,6 @@ def get_token(show_login_ui=True):
             save_cache(cache)
             return result["access_token"]
 
-    # ログイン UI を返す
     if show_login_ui:
         auth_url = app.get_authorization_request_url(SCOPE, redirect_uri=REDIRECT_URI)
         return auth_url
@@ -187,11 +184,11 @@ def dashboard(sheet1, sheet2):
     st.markdown(
         """
         <style>
-        .title-custom {
-            font-size: 20px !important;
+        .subtitle {
+            font-size: 22px !important;
             font-weight: 600 !important;
             color: #555 !important;
-            margin-bottom: 4px !important;
+            margin: 12px 0 6px 0 !important;
         }
         .big-card {
             padding: 10px 12px !important;
@@ -204,19 +201,11 @@ def dashboard(sheet1, sheet2):
         .big-card h1 {
             font-size: 20px !important;
             margin: 0 !important;
-            line-height: 1.1 !important;
             color: #555 !important;
         }
         .big-card h2 {
             font-size: 14px !important;
             margin: 0 !important;
-            line-height: 1.1 !important;
-            color: #555 !important;
-        }
-        .cat-title {
-            font-weight: bold;
-            font-size: 18px;
-            margin-bottom: 4px;
             color: #555 !important;
         }
         .cat-box {
@@ -231,8 +220,6 @@ def dashboard(sheet1, sheet2):
         unsafe_allow_html=True,
     )
 
-    st.markdown("<div class='title-custom'>資産管理</div>", unsafe_allow_html=True)
-
     current_total, history = calc_total_and_history(sheet1, sheet2)
     diff_day, diff_month = calc_diff(current_total, history)
 
@@ -246,14 +233,12 @@ def dashboard(sheet1, sheet2):
         unsafe_allow_html=True,
     )
 
-    st.subheader("カテゴリ別資産")
+    st.markdown("<div class='subtitle'>カテゴリ別資産</div>", unsafe_allow_html=True)
 
     col_bank, col_cash, col_invest = st.columns(3)
 
     for col, t in zip([col_bank, col_cash, col_invest], ["bank", "cash", "invest"]):
         with col:
-            st.markdown(f"<div class='cat-title'>{TYPE_JP[t]}</div>", unsafe_allow_html=True)
-
             df_cat = sheet1[sheet1["type"] == t]
 
             for _, row in df_cat.iterrows():
@@ -267,42 +252,90 @@ def dashboard(sheet1, sheet2):
                     unsafe_allow_html=True,
                 )
 
-    st.subheader("資産推移（概算）")
+    st.markdown("<div class='subtitle'>資産推移（概算）</div>", unsafe_allow_html=True)
     st.line_chart(history.set_index("date")["total"])
 
 # ============================
-# 6. メイン UI（ログイン前後で分岐）
+# 6. メイン UI（固定ヘッダー＋ログイン前後）
 # ============================
 auth_result = get_token(show_login_ui=False)
 
-# ★★★ ログイン前の画面（スマホ対応・安定版） ★★★
+# ★★★ ログイン前画面 ★★★
 if not auth_result:
     st.markdown(
         """
         <style>
-        .title-custom {
-            font-size: 22px !important;
-            font-weight: 600 !important;
+        .login-title {
+            font-size: 26px !important;
+            font-weight: 700 !important;
             color: #555 !important;
-            margin-bottom: 12px !important;
+            margin-bottom: 20px !important;
         }
         </style>
         """,
         unsafe_allow_html=True,
     )
 
-    st.markdown("<div class='title-custom'>資産管理</div>", unsafe_allow_html=True)
+    st.markdown("<div class='login-title'>資産管理</div>", unsafe_allow_html=True)
 
     login_url = get_token(show_login_ui=True)
 
-    # スマホでも確実に動く「普通のリンク」
-    st.markdown(f"[Microsoft にログイン]({login_url})", unsafe_allow_html=True)
+    if st.button("Microsoft にログイン"):
+        st.markdown(f"[ログインはこちら]({login_url})", unsafe_allow_html=True)
 
     st.stop()
 
-# ★★★ ログイン後の画面 ★★★
+# ★★★ ログイン後 ★★★
 token = auth_result
 
+# 固定ヘッダー
+st.markdown(
+    """
+    <style>
+    .fixed-header {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        background-color: #f5f5f5;
+        padding: 10px 0 5px 0;
+        z-index: 9999;
+        text-align: center;
+        border-bottom: 1px solid #ddd;
+    }
+    .header-title {
+        font-size: 26px !important;
+        font-weight: 700 !important;
+        color: #555 !important;
+        margin-bottom: 6px !important;
+    }
+    .content {
+        margin-top: 120px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    """
+    <div class="fixed-header">
+        <div class="header-title">資産管理メニュー</div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+# メニュー（固定ヘッダーの下に表示）
+menu = st.radio(
+    "",
+    ["🏠 Dashboard", "➕ Input", "📄 List", "📊 Charts"],
+    horizontal=True,
+)
+
+st.markdown('<div class="content">', unsafe_allow_html=True)
+
+# OneDrive 読み込み
 sheets = read_workbook_from_onedrive(token, FILE_PATH)
 if sheets is None:
     st.stop()
@@ -310,17 +343,12 @@ if sheets is None:
 sheet1 = sheets["Sheet1"]
 sheet2 = sheets["Sheet2"]
 
-menu = st.radio(
-    "メニュー",
-    ["🏠 Dashboard", "➕ Input", "📄 List", "📊 Charts"],
-    horizontal=True,
-)
-
+# メニュー分岐
 if menu == "🏠 Dashboard":
     dashboard(sheet1, sheet2)
 
 elif menu == "➕ Input":
-    st.subheader("新しい仕訳を追加（Sheet2）")
+    st.markdown("<div class='subtitle'>新しい仕訳を追加</div>", unsafe_allow_html=True)
 
     sheet2 = sheet2.copy()
     sheet2.columns = ["date", "from", "to", "amount", "memo"]
@@ -351,14 +379,16 @@ elif menu == "➕ Input":
             st.experimental_rerun()
 
 elif menu == "📄 List":
-    st.subheader("Sheet2（履歴一覧）")
+    st.markdown("<div class='subtitle'>履歴一覧</div>", unsafe_allow_html=True)
     sheet2 = sheet2.copy()
     sheet2.columns = ["date", "from", "to", "amount", "memo"]
     st.dataframe(sheet2)
 
 elif menu == "📊 Charts":
-    st.subheader("金額の推移（Sheet2）")
+    st.markdown("<div class='subtitle'>金額の推移</div>", unsafe_allow_html=True)
     sheet2 = sheet2.copy()
     sheet2.columns = ["date", "from", "to", "amount", "memo"]
     sheet2["date"] = pd.to_datetime(sheet2["date"])
     st.line_chart(sheet2.set_index("date")["amount"])
+
+st.markdown("</div>", unsafe_allow_html=True)
