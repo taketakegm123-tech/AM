@@ -236,16 +236,17 @@ def dashboard_page(sheet1, sheet2):
 # ============================
 def input_page(sheet1, sheet2, sheets, token):
 
-    # 初期化
     defaults = {
         "exp_date": datetime.today().date(),
         "exp_amount": 0,
         "exp_from": "財布",
         "exp_to": "",
+        "exp_memo": "",
         "inc_date": datetime.today().date(),
         "inc_amount": 0,
         "inc_from": "",
         "inc_to": "財布",
+        "inc_memo": "",
     }
     for key, val in defaults.items():
         if key not in st.session_state:
@@ -287,6 +288,12 @@ def input_page(sheet1, sheet2, sheets, token):
             key="exp_to_input"
         )
 
+        st.session_state.exp_memo = st.text_input(
+            "メモ（任意）",
+            value=st.session_state.exp_memo,
+            key="exp_memo_input"
+        )
+
         if st.button("支出を入力"):
             date = pd.to_datetime(st.session_state.exp_date)
             amount = -abs(st.session_state.exp_amount)
@@ -296,7 +303,7 @@ def input_page(sheet1, sheet2, sheets, token):
                 "from": st.session_state.exp_from,
                 "to": st.session_state.exp_to,
                 "amount": amount,
-                "memo": ""
+                "memo": st.session_state.exp_memo
             }
 
             sheet2_local = sheet2.copy()
@@ -312,6 +319,7 @@ def input_page(sheet1, sheet2, sheets, token):
                 st.session_state.exp_amount = 0
                 st.session_state.exp_from = "財布"
                 st.session_state.exp_to = ""
+                st.session_state.exp_memo = ""
 
                 st.rerun()
 
@@ -348,6 +356,12 @@ def input_page(sheet1, sheet2, sheets, token):
             key="inc_to_select"
         )
 
+        st.session_state.inc_memo = st.text_input(
+            "メモ（任意）",
+            value=st.session_state.inc_memo,
+            key="inc_memo_input"
+        )
+
         if st.button("収入を入力"):
             date = pd.to_datetime(st.session_state.inc_date)
             amount = abs(st.session_state.inc_amount)
@@ -357,7 +371,7 @@ def input_page(sheet1, sheet2, sheets, token):
                 "from": st.session_state.inc_from,
                 "to": st.session_state.inc_to,
                 "amount": amount,
-                "memo": ""
+                "memo": st.session_state.inc_memo
             }
 
             sheet2_local = sheet2.copy()
@@ -373,27 +387,50 @@ def input_page(sheet1, sheet2, sheets, token):
                 st.session_state.inc_amount = 0
                 st.session_state.inc_from = ""
                 st.session_state.inc_to = "財布"
+                st.session_state.inc_memo = ""
 
                 st.rerun()
 
 # ============================
-# 7. List ページ
+# 7. List ページ（曜日付き）
 # ============================
 def list_page(sheet2):
     st.subheader("履歴一覧")
-    sheet2_local = sheet2.copy()
-    sheet2_local.columns = ["date", "from", "to", "amount", "memo"]
-    st.dataframe(sheet2_local)
+
+    df = sheet2.copy()
+    df.columns = ["date", "from", "to", "amount", "memo"]
+
+    df["date"] = pd.to_datetime(df["date"])
+
+    weekday_map = {
+        "Monday": "月",
+        "Tuesday": "火",
+        "Wednesday": "水",
+        "Thursday": "木",
+        "Friday": "金",
+        "Saturday": "土",
+        "Sunday": "日",
+    }
+
+    df["weekday"] = df["date"].dt.day_name().map(weekday_map)
+    df["date_display"] = df["date"].dt.strftime("%Y-%m-%d") + "（" + df["weekday"] + "）"
+
+    df = df[["date_display", "from", "to", "amount", "memo"]]
+
+    st.dataframe(df)
 
 # ============================
 # 8. Charts ページ
 # ============================
 def charts_page(sheet2):
     st.subheader("金額の推移")
-    sheet2_local = sheet2.copy()
-    sheet2_local.columns = ["date", "from", "to", "amount", "memo"]
-    sheet2_local["date"] = pd.to_datetime(sheet2_local["date"])
-    st.line_chart(sheet2_local.set_index("date")["amount"])
+
+    df = sheet2.copy()
+    df.columns = ["date", "from", "to", "amount", "memo"]
+
+    df["date"] = pd.to_datetime(df["date"])
+
+    st.line_chart(df.set_index("date")["amount"])
 
 # ============================
 # 9. ログイン処理
@@ -437,6 +474,17 @@ if "sheets" not in st.session_state:
 sheets = st.session_state.sheets
 sheet1 = sheets["Sheet1"]
 sheet2 = sheets["Sheet2"]
+
+# --- Sheet2 を 5 列に統一 ---
+expected_cols = ["date", "from", "to", "amount", "memo"]
+
+while len(sheet2.columns) < len(expected_cols):
+    sheet2[expected_cols[len(sheet2.columns)]] = ""
+
+if len(sheet2.columns) > len(expected_cols):
+    sheet2 = sheet2.iloc[:, :len(expected_cols)]
+
+sheet2.columns = expected_cols
 
 # ============================
 # 11. メニュー
