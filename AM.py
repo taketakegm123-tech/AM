@@ -99,7 +99,7 @@ def write_workbook_to_onedrive(access_token, file_path, sheets_dict):
     return response.status_code in [200, 201]
 
 # ============================
-# 4. Dashboard 計算ロジック（資産名で判定）
+# 4. Dashboard 計算ロジック
 # ============================
 def calc_total_and_history(sheet1, sheet2):
     sheet1 = sheet1.copy()
@@ -234,11 +234,10 @@ def dashboard_page(sheet1, sheet2):
     st.line_chart(history.set_index("date")["total"])
 
 # ============================
-# 6. Input ページ（session_state を使わない安全版）
+# 6. Input ページ（残高自動更新版）
 # ============================
 def input_page(sheet1, sheet2, sheets, token):
 
-    # リセット用カウンタ
     if "exp_reset" not in st.session_state:
         st.session_state.exp_reset = 0
     if "inc_reset" not in st.session_state:
@@ -266,24 +265,33 @@ def input_page(sheet1, sheet2, sheets, token):
                 st.error("金額は数字で入力してください")
                 return
 
+            amount_val = -abs(int(exp_amount))
+
             new_row = {
                 "date": pd.to_datetime(exp_date),
                 "from": exp_from,
                 "to": exp_to,
-                "amount": -abs(int(exp_amount)),
+                "amount": amount_val,
                 "memo": exp_memo
             }
 
             df = sheet2.copy()
             df.columns = ["date", "from", "to", "amount", "memo"]
             df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-
             sheets["Sheet2"] = df
-            write_workbook_to_onedrive(token, FILE_PATH, sheets)
 
+            # --- Sheet1 の残高更新 ---
+            sheet1 = sheets["Sheet1"].copy()
+            sheet1.columns = ["type", "name", "balance"]
+
+            if exp_from in sheet1["name"].values:
+                sheet1.loc[sheet1["name"] == exp_from, "balance"] -= abs(int(exp_amount))
+
+            sheets["Sheet1"] = sheet1
+
+            write_workbook_to_onedrive(token, FILE_PATH, sheets)
             st.session_state.sheets = read_workbook_from_onedrive(token, FILE_PATH)
 
-            # key を更新 → フォームが初期化される
             st.session_state.exp_reset += 1
             st.rerun()
 
@@ -306,28 +314,38 @@ def input_page(sheet1, sheet2, sheets, token):
                 st.error("金額は数字で入力してください")
                 return
 
+            amount_val = abs(int(inc_amount))
+
             new_row = {
                 "date": pd.to_datetime(inc_date),
                 "from": inc_from,
                 "to": inc_to,
-                "amount": abs(int(inc_amount)),
+                "amount": amount_val,
                 "memo": inc_memo
             }
 
             df = sheet2.copy()
             df.columns = ["date", "from", "to", "amount", "memo"]
             df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-
             sheets["Sheet2"] = df
-            write_workbook_to_onedrive(token, FILE_PATH, sheets)
 
+            # --- Sheet1 の残高更新 ---
+            sheet1 = sheets["Sheet1"].copy()
+            sheet1.columns = ["type", "name", "balance"]
+
+            if inc_to in sheet1["name"].values:
+                sheet1.loc[sheet1["name"] == inc_to, "balance"] += abs(int(inc_amount))
+
+            sheets["Sheet1"] = sheet1
+
+            write_workbook_to_onedrive(token, FILE_PATH, sheets)
             st.session_state.sheets = read_workbook_from_onedrive(token, FILE_PATH)
 
             st.session_state.inc_reset += 1
             st.rerun()
 
 # ============================
-# 7. List ページ（表形式・編集削除なし）
+# 7. List ページ
 # ============================
 def list_page(sheet2):
     st.subheader("履歴一覧")
@@ -336,7 +354,6 @@ def list_page(sheet2):
     df.columns = ["date", "from", "to", "amount", "memo"]
 
     df["date"] = pd.to_datetime(df["date"])
-
     df["type"] = df["amount"].apply(lambda x: "支出" if x < 0 else "収入")
 
     weekday_map = {
