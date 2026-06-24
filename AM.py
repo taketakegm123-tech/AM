@@ -159,163 +159,10 @@ def calc_diff(current_total, history):
     return current_total - yesterday_total, current_total - last_month_total
 
 # ============================
-# 5. ページ管理（JS → hidden input → session_state）
+# 5. ページ UI
 # ============================
 
-# 初期ページ設定
-if "page" not in st.session_state:
-    st.session_state.page = "Dashboard"
-
-# hidden input（JS がここに値を書き込む）
-page_holder = st.text_input("page_holder", value=st.session_state.page, key="page_holder", label_visibility="hidden")
-
-# hidden input の値が変わったら session_state.page を更新
-if page_holder != st.session_state.page:
-    st.session_state.page = page_holder
-
-
-# ============================
-# 7. ログイン処理（固定ヘッダーの後に配置）
-# ============================
-
-auth_result = get_token(show_login_ui=False)
-
-# ログイン前画面
-if not auth_result:
-
-    st.markdown(
-        """
-        <style>
-        .login-title {
-            font-size: 28px !important;
-            font-weight: 700 !important;
-            color: #555 !important;
-            margin-bottom: 20px !important;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    st.markdown("<div class='login-title'>資産管理</div>", unsafe_allow_html=True)
-
-    login_url = get_token(show_login_ui=True)
-
-    st.markdown(
-        f"""
-        <a href="{login_url}">
-            <button style="
-                padding: 10px 20px;
-                font-size: 18px;
-                background-color: #4a90e2;
-                color: white;
-                border: none;
-                border-radius: 6px;
-            ">
-                Microsoft にログイン
-            </button>
-        </a>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    st.stop()
-
-# ログイン後
-token = auth_result
-
-# ============================
-# 6. 固定ヘッダー（HTML + JavaScript）
-# ============================
-
-st.markdown(
-    """
-    <style>
-    .fixed-header {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        background-color: #f5f5f5;
-        padding: 12px 0;
-        z-index: 9999;
-        border-bottom: 1px solid #ddd;
-        text-align: center;
-    }
-    .menu-btn {
-        margin: 0 6px;
-        padding: 6px 12px;
-        font-size: 15px;
-        border-radius: 6px;
-        border: 1px solid #aaa;
-        background-color: white;
-        color: #555;
-        cursor: pointer;
-    }
-    .menu-btn-active {
-        background-color: #e9d5ff;
-        border-color: #b48cff;
-        font-weight: 700;
-    }
-    .content {
-        margin-top: 90px;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-st.markdown(
-    """
-    <script>
-    function setPage(value) {
-        const input = window.parent.document.querySelector('input[id="page_holder"]');
-        if (input) {
-            input.value = value;
-            input.dispatchEvent(new Event('input', { bubbles: true }));
-        }
-    }
-    </script>
-    """,
-    unsafe_allow_html=True,
-)
-
-st.markdown(
-    f"""
-    <div class="fixed-header">
-        <button class="menu-btn {'menu-btn-active' if st.session_state.page=='Dashboard' else ''}"
-            onclick="setPage('Dashboard')">🏠 Dashboard</button>
-
-        <button class="menu-btn {'menu-btn-active' if st.session_state.page=='Input' else ''}"
-            onclick="setPage('Input')">➕ Input</button>
-
-        <button class="menu-btn {'menu-btn-active' if st.session_state.page=='List' else ''}"
-            onclick="setPage('List')">📄 List</button>
-
-        <button class="menu-btn {'menu-btn-active' if st.session_state.page=='Charts' else ''}"
-            onclick="setPage('Charts')">📊 Charts</button>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
-# ============================
-# 8. OneDrive 読み込み
-# ============================
-
-sheets = read_workbook_from_onedrive(token, FILE_PATH)
-if sheets is None:
-    st.stop()
-
-sheet1 = sheets["Sheet1"]
-sheet2 = sheets["Sheet2"]
-
-
-# ============================
-# 9. Dashboard ページ
-# ============================
-
-def dashboard_page():
+def dashboard_page(sheet1, sheet2):
     current_total, history = calc_total_and_history(sheet1, sheet2)
     diff_day, diff_month = calc_diff(current_total, history)
 
@@ -336,21 +183,6 @@ def dashboard_page():
             color: #555 !important;
             text-align: center;
             margin-bottom: 16px;
-        }
-        .big-card h1 {
-            font-size: 22px !important;
-            margin: 0 !important;
-        }
-        .big-card h2 {
-            font-size: 14px !important;
-            margin: 0 !important;
-        }
-        .cat-box {
-            padding: 10px;
-            border-radius: 8px;
-            margin-bottom: 10px;
-            border: 1px solid #aaa;
-            color: #555 !important;
         }
         </style>
         """,
@@ -381,7 +213,7 @@ def dashboard_page():
         for _, row in df_cat.iterrows():
             col.markdown(
                 f"""
-                <div class="cat-box" style="background-color:{TYPE_COLOR[t]};">
+                <div style="padding:10px; border-radius:8px; border:1px solid #aaa; background-color:{TYPE_COLOR[t]}; margin-bottom:10px;">
                     {row['name']}<br>
                     ¥{row['balance']:,.0f}
                 </div>
@@ -392,12 +224,7 @@ def dashboard_page():
     st.markdown("<div class='subtitle'>資産推移（概算）</div>", unsafe_allow_html=True)
     st.line_chart(history.set_index("date")["total"])
 
-
-# ============================
-# 10. Input ページ
-# ============================
-
-def input_page():
+def input_page(sheet2, sheets, token):
     st.markdown("<div class='subtitle'>新しい仕訳を追加</div>", unsafe_allow_html=True)
 
     sheet2_local = sheet2.copy()
@@ -428,42 +255,72 @@ def input_page():
             st.success("OneDrive の Excel に保存しました。")
             st.experimental_rerun()
 
-
-# ============================
-# 11. List ページ
-# ============================
-
-def list_page():
+def list_page(sheet2):
     st.markdown("<div class='subtitle'>履歴一覧</div>", unsafe_allow_html=True)
     sheet2_local = sheet2.copy()
     sheet2_local.columns = ["date", "from", "to", "amount", "memo"]
     st.dataframe(sheet2_local)
 
-
-# ============================
-# 12. Charts ページ
-# ============================
-
-def charts_page():
+def charts_page(sheet2):
     st.markdown("<div class='subtitle'>金額の推移</div>", unsafe_allow_html=True)
     sheet2_local = sheet2.copy()
     sheet2_local.columns = ["date", "from", "to", "amount", "memo"]
     sheet2_local["date"] = pd.to_datetime(sheet2_local["date"])
     st.line_chart(sheet2_local.set_index("date")["amount"])
 
+# ============================
+# 6. ログイン処理
+# ============================
+
+auth_result = get_token(show_login_ui=False)
+
+if not auth_result:
+    st.title("資産管理")
+    login_url = get_token(show_login_ui=True)
+    st.markdown(f"[Microsoft にログイン]({login_url})")
+    st.stop()
+
+token = auth_result
 
 # ============================
-# 13. ページ切り替え
+# 7. OneDrive 読み込み
+# ============================
+
+sheets = read_workbook_from_onedrive(token, FILE_PATH)
+if sheets is None:
+    st.stop()
+
+sheet1 = sheets["Sheet1"]
+sheet2 = sheets["Sheet2"]
+
+# ============================
+# 8. メニュー（ラジオボタン）
+# ============================
+
+if "page" not in st.session_state:
+    st.session_state.page = "Dashboard"
+
+menu = st.radio(
+    "メニュー",
+    ["Dashboard", "Input", "List", "Charts"],
+    horizontal=True,
+    index=["Dashboard", "Input", "List", "Charts"].index(st.session_state.page)
+)
+
+st.session_state.page = menu
+
+# ============================
+# 9. ページ切り替え
 # ============================
 
 if st.session_state.page == "Dashboard":
-    dashboard_page()
+    dashboard_page(sheet1, sheet2)
 
 elif st.session_state.page == "Input":
-    input_page()
+    input_page(sheet2, sheets, token)
 
 elif st.session_state.page == "List":
-    list_page()
+    list_page(sheet2)
 
 elif st.session_state.page == "Charts":
-    charts_page()
+    charts_page(sheet2)
