@@ -99,7 +99,7 @@ def write_workbook_to_onedrive(access_token, file_path, sheets_dict):
     return response.status_code in [200, 201]
 
 # ============================
-# 4. Dashboard 計算ロジック（資産名で判定するよう修正済み）
+# 4. Dashboard 計算ロジック（資産名で判定）
 # ============================
 def calc_total_and_history(sheet1, sheet2):
     sheet1 = sheet1.copy()
@@ -110,7 +110,7 @@ def calc_total_and_history(sheet1, sheet2):
 
     current_total = sheet1["balance"].sum()
 
-    # ✔ 資産名で判定（重要修正）
+    # ✔ 資産名で判定
     asset_names = sheet1["name"].tolist()
 
     def row_delta(row):
@@ -355,7 +355,7 @@ def input_page(sheet1, sheet2, sheets, token):
                 st.rerun()
 
 # ============================
-# 7. List ページ（新しい順＋横並び＋編集＋削除確認）
+# 7. List ページ（表形式＋行番号選択）
 # ============================
 def list_page(sheet2):
     st.subheader("履歴一覧")
@@ -364,39 +364,32 @@ def list_page(sheet2):
     df.columns = ["date", "from", "to", "amount", "memo"]
     df["date"] = pd.to_datetime(df["date"])
 
-    weekday_map = {
-        "Monday": "月", "Tuesday": "火", "Wednesday": "水",
-        "Thursday": "木", "Friday": "金", "Saturday": "土", "Sunday": "日"
-    }
+    # 新しい順
+    df = df.sort_values("date", ascending=False).reset_index(drop=False)
+    df.rename(columns={"index": "row_id"}, inplace=True)
 
-    df["weekday"] = df["date"].dt.day_name().map(weekday_map)
-    df["date_display"] = df["date"].dt.strftime("%Y-%m-%d") + "（" + df["weekday"] + "）"
-    df["type"] = df["amount"].apply(lambda x: "支出" if x < 0 else "収入")
+    # 表示用
+    display_df = df.copy()
+    display_df["date"] = display_df["date"].dt.strftime("%Y-%m-%d")
 
-    # ✔ 新しい順
-    df = df.sort_values("date", ascending=False).reset_index(drop=True)
+    st.dataframe(display_df, use_container_width=True)
 
-    for i, row in df.iterrows():
-        with st.container(border=True):
-            col1, col2, col3, col4, col5, col6, col7, col8 = st.columns([2,1,2,2,1,2,1,1])
+    # 行番号選択
+    row_ids = display_df["row_id"].tolist()
+    selected = st.selectbox("操作する行番号を選択", row_ids)
 
-            col1.write(row["date_display"])
-            col2.write(row["type"])
-            col3.write(row["from"])
-            col4.write(row["to"])
-            col5.write(f"¥{row['amount']:,.0f}")
-            col6.write(row["memo"])
+    col1, col2 = st.columns(2)
 
-            if col7.button("編集", key=f"edit_{i}"):
-                st.session_state.edit_index = i
-                st.session_state.edit_memo = row["memo"]
-                st.session_state.page = "Edit"
-                st.rerun()
+    if col1.button("編集"):
+        st.session_state.edit_index = selected
+        st.session_state.edit_memo = sheet2.loc[selected, "memo"]
+        st.session_state.page = "Edit"
+        st.rerun()
 
-            if col8.button("削除", key=f"delete_{i}"):
-                st.session_state.delete_index = i
-                st.session_state.page = "DeleteConfirm"
-                st.rerun()
+    if col2.button("削除"):
+        st.session_state.delete_index = selected
+        st.session_state.page = "DeleteConfirm"
+        st.rerun()
 
 # ============================
 # 8. メモ編集ページ
@@ -411,7 +404,6 @@ def edit_page(sheet2, sheets, token):
 
     if st.button("保存"):
         df = sheet2.copy()
-        df.columns = ["date", "from", "to", "amount", "memo"]
         df.loc[idx, "memo"] = st.session_state.edit_memo_input
 
         sheets["Sheet2"] = df
@@ -432,6 +424,7 @@ def delete_confirm_page(sheet2, sheets, token):
     st.subheader("削除確認")
 
     idx = st.session_state.delete_index
+
     st.write("本当に削除しますか？")
 
     col1, col2 = st.columns(2)
@@ -484,7 +477,7 @@ token = auth_result
 st.session_state.token = token
 
 # ============================
-# 11. OneDrive 読み込み（高速化）
+# 11. OneDrive 読み込み
 # ============================
 if "sheets" not in st.session_state:
     st.session_state.sheets = read_workbook_from_onedrive(token, FILE_PATH)
