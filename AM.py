@@ -39,21 +39,19 @@ def get_token():
     cache = load_cache()
     app = build_msal_app(cache)
 
+    # 既存トークンがあればサイレント取得
     accounts = app.get_accounts()
     if accounts:
         result = app.acquire_token_silent(SCOPE, account=accounts[0])
         if result and "access_token" in result:
             return result["access_token"]
 
-    auth_url = app.get_authorization_request_url(SCOPE, redirect_uri=REDIRECT_URI)
-    st.markdown(f"[ここをクリックして Microsoft にログインする]({auth_url})")
-
+    # クエリパラメータから code を取得（リダイレクト後）
     raw_params = st.query_params
     query_params = dict(raw_params)
 
     if "code" in query_params:
         code = query_params["code"]
-
         result = app.acquire_token_by_authorization_code(
             code,
             scopes=SCOPE,
@@ -63,6 +61,9 @@ def get_token():
             save_cache(cache)
             return result["access_token"]
 
+    # ここまで来たら未ログインなのでリンクを表示
+    auth_url = app.get_authorization_request_url(SCOPE, redirect_uri=REDIRECT_URI)
+    st.markdown(f"[ここをクリックして Microsoft にログインする]({auth_url})")
     return None
 
 # ============================
@@ -108,6 +109,13 @@ def write_workbook_to_onedrive(access_token, file_path, sheets_dict):
 # 4. Dashboard 計算ロジック
 # ============================
 def calc_total_and_history(sheet1, sheet2):
+    # 列名を想定通りに揃える
+    sheet1 = sheet1.copy()
+    sheet2 = sheet2.copy()
+    sheet1.columns = ["type", "name", "balance"]
+    sheet2.columns = ["date", "from", "to", "amount", "memo"]
+    sheet2["date"] = pd.to_datetime(sheet2["date"])
+
     current_total = sheet1["balance"].sum()
     asset_types = sheet1["type"].unique().tolist()
 
@@ -118,10 +126,13 @@ def calc_total_and_history(sheet1, sheet2):
         f_is_asset = f in asset_types
         t_is_asset = t in asset_types
 
+        # 振替：総資産変化なし
         if f_is_asset and t_is_asset:
             return 0
+        # 支出：資産 → 費目
         if f_is_asset and not t_is_asset:
             return -amt
+        # 収入：収入源 → 資産
         if not f_is_asset and t_is_asset:
             return +amt
         return 0
@@ -135,7 +146,6 @@ def calc_total_and_history(sheet1, sheet2):
             "total": [current_total]
         })
     else:
-        last_date = daily_delta.index.max().date()
         daily_delta_sorted = daily_delta.sort_index(ascending=False)
         totals = []
         running_total = current_total
@@ -176,21 +186,30 @@ def dashboard(sheet1, sheet2):
         "invest": "#fde2e4"  # 薄いピンク
     }
 
-    # CSS（行間をさらに詰め、枠線だけ黒に）
     st.markdown(
         """
         <style>
         .big-card {
-            padding: 8px 12px;
+            padding: 6px 10px !important;
             border-radius: 12px;
             border: 2px solid #0f172a;
-            background-color: transparent;
-            color: #0f172a;
+            background-color: transparent !important;
+            color: #0f172a !important;
             text-align: center;
-            margin-bottom: 16px;
+            margin-bottom: 12px;
         }
-        .big-card h1 { font-size: 24px; margin: 0; line-height: 1.1; }
-        .big-card h2 { font-size: 14px; margin: 0; line-height: 1.1; }
+        .big-card h1 {
+            font-size: 22px !important;
+            margin: 0 !important;
+            line-height: 1.0 !important;
+            padding: 0 !important;
+        }
+        .big-card h2 {
+            font-size: 14px !important;
+            margin: 0 !important;
+            line-height: 1.0 !important;
+            padding: 0 !important;
+        }
 
         .cat-title {
             font-weight: bold;
@@ -208,14 +227,11 @@ def dashboard(sheet1, sheet2):
         unsafe_allow_html=True,
     )
 
-    # 計算
     current_total, history = calc_total_and_history(sheet1, sheet2)
     diff_day, diff_month = calc_diff(current_total, history)
 
-    # タイトル（1回だけ）
     st.title("資産管理")
 
-    # 総資産カード（枠線だけ黒・行間詰め）
     st.markdown(
         f"""
         <div class="big-card">
@@ -227,7 +243,6 @@ def dashboard(sheet1, sheet2):
         unsafe_allow_html=True,
     )
 
-    # カテゴリ別資産（3カラム）
     st.subheader("カテゴリ別資産")
 
     col_bank, col_cash, col_invest = st.columns(3)
@@ -249,18 +264,15 @@ def dashboard(sheet1, sheet2):
                     unsafe_allow_html=True,
                 )
 
-    # 資産推移グラフ
     st.subheader("資産推移（概算）")
     st.line_chart(history.set_index("date")["total"])
 
 # ============================
-# 6. メイン UI
+# 6. メイン UI（完全版）
 # ============================
-st.title("資産管理")
-
 token = get_token()
 if not token:
-    st.info("上のリンクからログインしてください。")
+    st.info("ログインしてください。")
     st.stop()
 
 sheets = read_workbook_from_onedrive(token, FILE_PATH)
@@ -280,11 +292,45 @@ if menu == "🏠 Dashboard":
     dashboard(sheet1, sheet2)
 
 elif menu == "➕ Input":
-    st.write("（後でスマホ最適化版にする）")
-    st.dataframe(sheet2)
+    st.subheader("新しい仕訳を追加（Sheet2）")
+
+    sheet2 = sheet2.copy()
+    sheet2.columns = ["date", "from", "to", "amount", "memo"]
+
+    col1, col2 = st.columns(2)
+    with col1:
+        date = st.date_input("日付")
+    with col2:
+        amount = st.number_input("金額", step=100)
+
+    from_ = st.text_input("from（出金元）")
+    to_ = st.text_input("to（入金先／費目）")
+    memo = st.text_input("メモ")
+
+    if st.button("仕訳を追加して保存"):
+        new_row = {
+            "date": date,
+            "from": from_,
+            "to": to_,
+            "amount": amount,
+            "memo": memo,
+        }
+        df_updated = pd.concat([sheet2, pd.DataFrame([new_row])], ignore_index=True)
+        sheets["Sheet2"] = df_updated
+        ok = write_workbook_to_onedrive(token, FILE_PATH, sheets)
+        if ok:
+            st.success("OneDrive の Excel に保存しました。")
+            st.experimental_rerun()
 
 elif menu == "📄 List":
+    st.subheader("Sheet2（履歴一覧）")
+    sheet2 = sheet2.copy()
+    sheet2.columns = ["date", "from", "to", "amount", "memo"]
     st.dataframe(sheet2)
 
 elif menu == "📊 Charts":
+    st.subheader("金額の推移（Sheet2）")
+    sheet2 = sheet2.copy()
+    sheet2.columns = ["date", "from", "to", "amount", "memo"]
+    sheet2["date"] = pd.to_datetime(sheet2["date"])
     st.line_chart(sheet2.set_index("date")["amount"])
