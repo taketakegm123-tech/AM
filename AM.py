@@ -238,12 +238,12 @@ def input_page(sheet1, sheet2, sheets, token):
 
     defaults = {
         "exp_date": datetime.today().date(),
-        "exp_amount": 0,
+        "exp_amount": "",
         "exp_from": "財布",
         "exp_to": "",
         "exp_memo": "",
         "inc_date": datetime.today().date(),
-        "inc_amount": 0,
+        "inc_amount": "",
         "inc_from": "",
         "inc_to": "財布",
         "inc_memo": "",
@@ -261,42 +261,19 @@ def input_page(sheet1, sheet2, sheets, token):
     with st.container(border=True):
         st.subheader("支出")
 
-        st.session_state.exp_date = st.date_input(
-            "日付",
-            value=st.session_state.exp_date,
-            key="exp_date_input"
-        )
-
-        st.session_state.exp_amount = st.number_input(
-            "金額（プラスで入力）",
-            min_value=0,
-            step=100,
-            value=st.session_state.exp_amount,
-            key="exp_amount_input"
-        )
-
-        st.session_state.exp_from = st.selectbox(
-            "from（出金元）",
-            asset_list,
-            index=default_wallet_index,
-            key="exp_from_select"
-        )
-
-        st.session_state.exp_to = st.text_input(
-            "to（費目）",
-            value=st.session_state.exp_to,
-            key="exp_to_input"
-        )
-
-        st.session_state.exp_memo = st.text_input(
-            "メモ（任意）",
-            value=st.session_state.exp_memo,
-            key="exp_memo_input"
-        )
+        st.date_input("日付", key="exp_date")
+        st.text_input("金額（プラスで入力）", key="exp_amount")
+        st.selectbox("from（出金元）", asset_list, index=default_wallet_index, key="exp_from")
+        st.text_input("to（費目）", key="exp_to")
+        st.text_input("メモ（任意）", key="exp_memo")
 
         if st.button("支出を入力"):
+            if not st.session_state.exp_amount.isdigit():
+                st.error("金額は数字で入力してください")
+                return
+
             date = pd.to_datetime(st.session_state.exp_date)
-            amount = -abs(st.session_state.exp_amount)
+            amount = -abs(int(st.session_state.exp_amount))
 
             new_row = {
                 "date": date,
@@ -306,17 +283,17 @@ def input_page(sheet1, sheet2, sheets, token):
                 "memo": st.session_state.exp_memo
             }
 
-            sheet2_local = sheet2.copy()
-            sheet2_local.columns = ["date", "from", "to", "amount", "memo"]
-            df_updated = pd.concat([sheet2_local, pd.DataFrame([new_row])], ignore_index=True)
+            df = sheet2.copy()
+            df.columns = ["date", "from", "to", "amount", "memo"]
+            df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
 
-            sheets["Sheet2"] = df_updated
+            sheets["Sheet2"] = df
 
             if write_workbook_to_onedrive(token, FILE_PATH, sheets):
                 st.session_state.sheets = read_workbook_from_onedrive(token, FILE_PATH)
 
                 st.session_state.exp_date = datetime.today().date()
-                st.session_state.exp_amount = 0
+                st.session_state.exp_amount = ""
                 st.session_state.exp_from = "財布"
                 st.session_state.exp_to = ""
                 st.session_state.exp_memo = ""
@@ -329,42 +306,19 @@ def input_page(sheet1, sheet2, sheets, token):
     with st.container(border=True):
         st.subheader("収入")
 
-        st.session_state.inc_date = st.date_input(
-            "日付",
-            value=st.session_state.inc_date,
-            key="inc_date_input"
-        )
-
-        st.session_state.inc_amount = st.number_input(
-            "金額（プラスで入力）",
-            min_value=0,
-            step=100,
-            value=st.session_state.inc_amount,
-            key="inc_amount_input"
-        )
-
-        st.session_state.inc_from = st.text_input(
-            "from（収入元）",
-            value=st.session_state.inc_from,
-            key="inc_from_input"
-        )
-
-        st.session_state.inc_to = st.selectbox(
-            "to（入金先資産）",
-            asset_list,
-            index=default_wallet_index,
-            key="inc_to_select"
-        )
-
-        st.session_state.inc_memo = st.text_input(
-            "メモ（任意）",
-            value=st.session_state.inc_memo,
-            key="inc_memo_input"
-        )
+        st.date_input("日付", key="inc_date")
+        st.text_input("金額（プラスで入力）", key="inc_amount")
+        st.text_input("from（収入元）", key="inc_from")
+        st.selectbox("to（入金先資産）", asset_list, index=default_wallet_index, key="inc_to")
+        st.text_input("メモ（任意）", key="inc_memo")
 
         if st.button("収入を入力"):
+            if not st.session_state.inc_amount.isdigit():
+                st.error("金額は数字で入力してください")
+                return
+
             date = pd.to_datetime(st.session_state.inc_date)
-            amount = abs(st.session_state.inc_amount)
+            amount = abs(int(st.session_state.inc_amount))
 
             new_row = {
                 "date": date,
@@ -374,17 +328,17 @@ def input_page(sheet1, sheet2, sheets, token):
                 "memo": st.session_state.inc_memo
             }
 
-            sheet2_local = sheet2.copy()
-            sheet2_local.columns = ["date", "from", "to", "amount", "memo"]
-            df_updated = pd.concat([sheet2_local, pd.DataFrame([new_row])], ignore_index=True)
+            df = sheet2.copy()
+            df.columns = ["date", "from", "to", "amount", "memo"]
+            df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
 
-            sheets["Sheet2"] = df_updated
+            sheets["Sheet2"] = df
 
             if write_workbook_to_onedrive(token, FILE_PATH, sheets):
                 st.session_state.sheets = read_workbook_from_onedrive(token, FILE_PATH)
 
                 st.session_state.inc_date = datetime.today().date()
-                st.session_state.inc_amount = 0
+                st.session_state.inc_amount = ""
                 st.session_state.inc_from = ""
                 st.session_state.inc_to = "財布"
                 st.session_state.inc_memo = ""
@@ -392,45 +346,78 @@ def input_page(sheet1, sheet2, sheets, token):
                 st.rerun()
 
 # ============================
-# 7. List ページ（曜日付き）
+# 7. List ページ（区分表示＋メモ編集＋削除確認）
 # ============================
 def list_page(sheet2):
     st.subheader("履歴一覧")
 
     df = sheet2.copy()
     df.columns = ["date", "from", "to", "amount", "memo"]
-
     df["date"] = pd.to_datetime(df["date"])
 
     weekday_map = {
-        "Monday": "月",
-        "Tuesday": "火",
-        "Wednesday": "水",
-        "Thursday": "木",
-        "Friday": "金",
-        "Saturday": "土",
-        "Sunday": "日",
+        "Monday": "月", "Tuesday": "火", "Wednesday": "水",
+        "Thursday": "木", "Friday": "金", "Saturday": "土", "Sunday": "日"
     }
 
     df["weekday"] = df["date"].dt.day_name().map(weekday_map)
     df["date_display"] = df["date"].dt.strftime("%Y-%m-%d") + "（" + df["weekday"] + "）"
+    df["type"] = df["amount"].apply(lambda x: "支出" if x < 0 else "収入")
 
-    df = df[["date_display", "from", "to", "amount", "memo"]]
+    for i, row in df.iterrows():
+        with st.container(border=True):
+            st.write(f"**{row['date_display']}**")
+            st.write(f"区分：{row['type']}")
+            st.write(f"from：{row['from']} → to：{row['to']}")
+            st.write(f"金額：¥{row['amount']:,.0f}")
+            st.write(f"メモ：{row['memo']}")
 
-    st.dataframe(df)
+            col1, col2 = st.columns(2)
+
+            # 編集（メモだけ）
+            if col1.button("メモを編集", key=f"edit_{i}"):
+                st.session_state.edit_index = i
+                st.session_state.edit_memo = row["memo"]
+                st.session_state.page = "Edit"
+                st.rerun()
+
+            # 削除（確認あり）
+            if col2.button("削除", key=f"delete_{i}"):
+                if st.confirm("本当に削除しますか？"):
+                    df2 = df.drop(i)
+                    df2 = df2.drop(columns=["weekday", "date_display", "type"])
+                    sheets = st.session_state.sheets
+                    sheets["Sheet2"] = df2
+                    write_workbook_to_onedrive(st.session_state.token, FILE_PATH, sheets)
+                    st.session_state.sheets = read_workbook_from_onedrive(st.session_state.token, FILE_PATH)
+                    st.rerun()
 
 # ============================
-# 8. Charts ページ
+# 8. メモ編集ページ
 # ============================
-def charts_page(sheet2):
-    st.subheader("金額の推移")
+def edit_page(sheet2, sheets, token):
+    st.subheader("メモ編集")
 
-    df = sheet2.copy()
-    df.columns = ["date", "from", "to", "amount", "memo"]
+    idx = st.session_state.edit_index
+    memo = st.session_state.edit_memo
 
-    df["date"] = pd.to_datetime(df["date"])
+    st.text_input("メモを編集", key="edit_memo_input", value=memo)
 
-    st.line_chart(df.set_index("date")["amount"])
+    if st.button("保存"):
+        df = sheet2.copy()
+        df.columns = ["date", "from", "to", "amount", "memo"]
+        df.loc[idx, "memo"] = st.session_state.edit_memo_input
+
+        sheets["Sheet2"] = df
+        write_workbook_to_onedrive(token, FILE_PATH, sheets)
+        st.session_state.sheets = read_workbook_from_onedrive(token, FILE_PATH)
+
+        st.session_state.page = "List"
+        st.rerun()
+
+    if st.button("戻る"):
+        st.session_state.page = "List"
+        st.rerun()
 
 # ============================
 # 9. ログイン処理
@@ -464,6 +451,7 @@ if not auth_result:
     st.stop()
 
 token = auth_result
+st.session_state.token = token
 
 # ============================
 # 10. OneDrive 読み込み（高速化）
@@ -481,36 +469,4 @@ expected_cols = ["date", "from", "to", "amount", "memo"]
 while len(sheet2.columns) < len(expected_cols):
     sheet2[expected_cols[len(sheet2.columns)]] = ""
 
-if len(sheet2.columns) > len(expected_cols):
-    sheet2 = sheet2.iloc[:, :len(expected_cols)]
-
-sheet2.columns = expected_cols
-
-# ============================
-# 11. メニュー
-# ============================
-if "page" not in st.session_state:
-    st.session_state.page = "Dashboard"
-
-menu = st.radio(
-    "メニュー",
-    ["Dashboard", "Input", "List", "Charts"],
-    horizontal=True,
-)
-
-st.session_state.page = menu
-
-# ============================
-# 12. ページ切り替え
-# ============================
-if st.session_state.page == "Dashboard":
-    dashboard_page(sheet1, sheet2)
-
-elif st.session_state.page == "Input":
-    input_page(sheet1, sheet2, sheets, token)
-
-elif st.session_state.page == "List":
-    list_page(sheet2)
-
-elif st.session_state.page == "Charts":
-    charts_page(sheet2)
+if len(sheet2.columns)
