@@ -292,11 +292,15 @@ def input_page(sheet1, sheet2, sheets, token):
             if write_workbook_to_onedrive(token, FILE_PATH, sheets):
                 st.session_state.sheets = read_workbook_from_onedrive(token, FILE_PATH)
 
-                st.session_state.exp_date = datetime.today().date()
-                st.session_state.exp_amount = ""
-                st.session_state.exp_from = "財布"
-                st.session_state.exp_to = ""
-                st.session_state.exp_memo = ""
+                # 🔧 安全なリセット方法
+                for key, val in {
+                    "exp_date": datetime.today().date(),
+                    "exp_amount": "",
+                    "exp_from": "財布",
+                    "exp_to": "",
+                    "exp_memo": "",
+                }.items():
+                    st.session_state[key] = val
 
                 st.rerun()
 
@@ -337,16 +341,19 @@ def input_page(sheet1, sheet2, sheets, token):
             if write_workbook_to_onedrive(token, FILE_PATH, sheets):
                 st.session_state.sheets = read_workbook_from_onedrive(token, FILE_PATH)
 
-                st.session_state.inc_date = datetime.today().date()
-                st.session_state.inc_amount = ""
-                st.session_state.inc_from = ""
-                st.session_state.inc_to = "財布"
-                st.session_state.inc_memo = ""
+                for key, val in {
+                    "inc_date": datetime.today().date(),
+                    "inc_amount": "",
+                    "inc_from": "",
+                    "inc_to": "財布",
+                    "inc_memo": "",
+                }.items():
+                    st.session_state[key] = val
 
                 st.rerun()
 
 # ============================
-# 7. List ページ（区分表示＋メモ編集＋削除確認）
+# 7. List ページ（1 行表示＋区分＋メモ編集＋削除確認）
 # ============================
 def list_page(sheet2):
     st.subheader("履歴一覧")
@@ -364,33 +371,33 @@ def list_page(sheet2):
     df["date_display"] = df["date"].dt.strftime("%Y-%m-%d") + "（" + df["weekday"] + "）"
     df["type"] = df["amount"].apply(lambda x: "支出" if x < 0 else "収入")
 
+    # 表示用データフレーム（1 行表示）
+    display_df = df[["date_display", "type", "from", "to", "amount", "memo"]].copy()
+
+    # 編集・削除ボタンのキーを埋め込む
+    display_df["編集"] = [f"edit_{i}" for i in display_df.index]
+    display_df["削除"] = [f"delete_{i}" for i in display_df.index]
+
+    st.dataframe(display_df, use_container_width=True)
+
+    # ボタン処理
     for i, row in df.iterrows():
-        with st.container(border=True):
-            st.write(f"**{row['date_display']}**")
-            st.write(f"区分：{row['type']}")
-            st.write(f"from：{row['from']} → to：{row['to']}")
-            st.write(f"金額：¥{row['amount']:,.0f}")
-            st.write(f"メモ：{row['memo']}")
 
-            col1, col2 = st.columns(2)
+        if st.button("編集", key=f"edit_{i}"):
+            st.session_state.edit_index = i
+            st.session_state.edit_memo = row["memo"]
+            st.session_state.page = "Edit"
+            st.rerun()
 
-            # 編集（メモだけ）
-            if col1.button("メモを編集", key=f"edit_{i}"):
-                st.session_state.edit_index = i
-                st.session_state.edit_memo = row["memo"]
-                st.session_state.page = "Edit"
+        if st.button("削除", key=f"delete_{i}"):
+            if st.confirm("本当に削除しますか？"):
+                df2 = df.drop(i)
+                df2 = df2.drop(columns=["weekday", "date_display", "type"])
+                sheets = st.session_state.sheets
+                sheets["Sheet2"] = df2
+                write_workbook_to_onedrive(st.session_state.token, FILE_PATH, sheets)
+                st.session_state.sheets = read_workbook_from_onedrive(st.session_state.token, FILE_PATH)
                 st.rerun()
-
-            # 削除（確認あり）
-            if col2.button("削除", key=f"delete_{i}"):
-                if st.confirm("本当に削除しますか？"):
-                    df2 = df.drop(i)
-                    df2 = df2.drop(columns=["weekday", "date_display", "type"])
-                    sheets = st.session_state.sheets
-                    sheets["Sheet2"] = df2
-                    write_workbook_to_onedrive(st.session_state.token, FILE_PATH, sheets)
-                    st.session_state.sheets = read_workbook_from_onedrive(st.session_state.token, FILE_PATH)
-                    st.rerun()
 
 # ============================
 # 8. メモ編集ページ
