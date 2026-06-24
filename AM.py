@@ -295,10 +295,19 @@ if not auth_result:
 
     login_url = get_token(show_login_ui=True)
 
+    # ★★★ スマホ対応：JavaScript リダイレクトに変更 ★★★
     if st.button("Microsoft にログイン"):
-        st.markdown(f"<meta http-equiv='refresh' content='0; url={login_url}'>", unsafe_allow_html=True)
+        st.markdown(
+            f"""
+            <script>
+                window.location.href = "{login_url}";
+            </script>
+            """,
+            unsafe_allow_html=True,
+        )
 
     st.stop()
+
 
 # ★★★ ログイン後の画面 ★★★
 token = auth_result
