@@ -295,12 +295,15 @@ def input_page(sheet1, sheet2, sheets, token):
             if write_workbook_to_onedrive(token, FILE_PATH, sheets):
                 st.session_state.sheets = read_workbook_from_onedrive(token, FILE_PATH)
 
-                # ✔ session_state の安全なリセット
-                st.session_state.exp_date = datetime.today().date()
-                st.session_state.exp_amount = ""
-                st.session_state.exp_from = "財布"
-                st.session_state.exp_to = ""
-                st.session_state.exp_memo = ""
+                # ✔ session_state の安全なリセット（辞書方式）
+                for key, val in {
+                    "exp_date": datetime.today().date(),
+                    "exp_amount": "",
+                    "exp_from": "財布",
+                    "exp_to": "",
+                    "exp_memo": "",
+                }.items():
+                    st.session_state[key] = val
 
                 st.rerun()
 
@@ -341,11 +344,14 @@ def input_page(sheet1, sheet2, sheets, token):
             if write_workbook_to_onedrive(token, FILE_PATH, sheets):
                 st.session_state.sheets = read_workbook_from_onedrive(token, FILE_PATH)
 
-                st.session_state.inc_date = datetime.today().date()
-                st.session_state.inc_amount = ""
-                st.session_state.inc_from = ""
-                st.session_state.inc_to = "財布"
-                st.session_state.inc_memo = ""
+                for key, val in {
+                    "inc_date": datetime.today().date(),
+                    "inc_amount": "",
+                    "inc_from": "",
+                    "inc_to": "財布",
+                    "inc_memo": "",
+                }.items():
+                    st.session_state[key] = val
 
                 st.rerun()
 
