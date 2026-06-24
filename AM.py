@@ -469,4 +469,36 @@ expected_cols = ["date", "from", "to", "amount", "memo"]
 while len(sheet2.columns) < len(expected_cols):
     sheet2[expected_cols[len(sheet2.columns)]] = ""
 
-if len(sheet2.columns)
+if len(sheet2.columns) > len(expected_cols):
+    sheet2 = sheet2.iloc[:, :len(expected_cols)]
+
+sheet2.columns = expected_cols
+
+# ============================
+# 11. メニュー
+# ============================
+if "page" not in st.session_state:
+    st.session_state.page = "Dashboard"
+
+menu = st.radio(
+    "メニュー",
+    ["Dashboard", "Input", "List"],
+    horizontal=True,
+)
+
+st.session_state.page = menu
+
+# ============================
+# 12. ページ切り替え
+# ============================
+if st.session_state.page == "Dashboard":
+    dashboard_page(sheet1, sheet2)
+
+elif st.session_state.page == "Input":
+    input_page(sheet1, sheet2, sheets, token)
+
+elif st.session_state.page == "List":
+    list_page(sheet2)
+
+elif st.session_state.page == "Edit":
+    edit_page(sheet2, sheets, token)
