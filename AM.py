@@ -295,14 +295,12 @@ def input_page(sheet1, sheet2, sheets, token):
             if write_workbook_to_onedrive(token, FILE_PATH, sheets):
                 st.session_state.sheets = read_workbook_from_onedrive(token, FILE_PATH)
 
-                for key, val in {
-                    "exp_date": datetime.today().date(),
-                    "exp_amount": "",
-                    "exp_from": "財布",
-                    "exp_to": "",
-                    "exp_memo": "",
-                }.items():
-                    st.session_state[key] = val
+                # ✔ session_state の安全なリセット
+                st.session_state.exp_date = datetime.today().date()
+                st.session_state.exp_amount = ""
+                st.session_state.exp_from = "財布"
+                st.session_state.exp_to = ""
+                st.session_state.exp_memo = ""
 
                 st.rerun()
 
@@ -343,104 +341,43 @@ def input_page(sheet1, sheet2, sheets, token):
             if write_workbook_to_onedrive(token, FILE_PATH, sheets):
                 st.session_state.sheets = read_workbook_from_onedrive(token, FILE_PATH)
 
-                for key, val in {
-                    "inc_date": datetime.today().date(),
-                    "inc_amount": "",
-                    "inc_from": "",
-                    "inc_to": "財布",
-                    "inc_memo": "",
-                }.items():
-                    st.session_state[key] = val
+                st.session_state.inc_date = datetime.today().date()
+                st.session_state.inc_amount = ""
+                st.session_state.inc_from = ""
+                st.session_state.inc_to = "財布"
+                st.session_state.inc_memo = ""
 
                 st.rerun()
 
 # ============================
-# 7. List ページ（表形式＋行番号選択）
+# 7. List ページ（表形式・編集削除なし）
 # ============================
 def list_page(sheet2):
     st.subheader("履歴一覧")
 
     df = sheet2.copy()
     df.columns = ["date", "from", "to", "amount", "memo"]
+
     df["date"] = pd.to_datetime(df["date"])
 
-    # 新しい順
-    df = df.sort_values("date", ascending=False).reset_index(drop=False)
-    df.rename(columns={"index": "row_id"}, inplace=True)
+    # 区分
+    df["type"] = df["amount"].apply(lambda x: "支出" if x < 0 else "収入")
 
-    # 表示用
-    display_df = df.copy()
-    display_df["date"] = display_df["date"].dt.strftime("%Y-%m-%d")
+    # 曜日
+    weekday_map = {
+        "Monday": "月", "Tuesday": "火", "Wednesday": "水",
+        "Thursday": "木", "Friday": "金", "Saturday": "土", "Sunday": "日"
+    }
+    df["weekday"] = df["date"].dt.day_name().map(weekday_map)
+
+    df["date_display"] = df["date"].dt.strftime("%Y-%m-%d") + "（" + df["weekday"] + "）"
+
+    # 新しい順
+    df = df.sort_values("date", ascending=False)
+
+    display_df = df[["date_display", "type", "from", "to", "amount", "memo"]].copy()
 
     st.dataframe(display_df, use_container_width=True)
-
-    # 行番号選択
-    row_ids = display_df["row_id"].tolist()
-    selected = st.selectbox("操作する行番号を選択", row_ids)
-
-    col1, col2 = st.columns(2)
-
-    if col1.button("編集"):
-        st.session_state.edit_index = selected
-        st.session_state.edit_memo = sheet2.loc[selected, "memo"]
-        st.session_state.page = "Edit"
-        st.rerun()
-
-    if col2.button("削除"):
-        st.session_state.delete_index = selected
-        st.session_state.page = "DeleteConfirm"
-        st.rerun()
-
-# ============================
-# 8. メモ編集ページ
-# ============================
-def edit_page(sheet2, sheets, token):
-    st.subheader("メモ編集")
-
-    idx = st.session_state.edit_index
-    memo = st.session_state.edit_memo
-
-    st.text_input("メモを編集", key="edit_memo_input", value=memo)
-
-    if st.button("保存"):
-        df = sheet2.copy()
-        df.loc[idx, "memo"] = st.session_state.edit_memo_input
-
-        sheets["Sheet2"] = df
-        write_workbook_to_onedrive(token, FILE_PATH, sheets)
-        st.session_state.sheets = read_workbook_from_onedrive(token, FILE_PATH)
-
-        st.session_state.page = "List"
-        st.rerun()
-
-    if st.button("戻る"):
-        st.session_state.page = "List"
-        st.rerun()
-
-# ============================
-# 9. 削除確認ページ
-# ============================
-def delete_confirm_page(sheet2, sheets, token):
-    st.subheader("削除確認")
-
-    idx = st.session_state.delete_index
-
-    st.write("本当に削除しますか？")
-
-    col1, col2 = st.columns(2)
-
-    if col1.button("はい、削除する"):
-        df = sheet2.copy()
-        df = df.drop(idx).reset_index(drop=True)
-        sheets["Sheet2"] = df
-        write_workbook_to_onedrive(token, FILE_PATH, sheets)
-        st.session_state.sheets = read_workbook_from_onedrive(token, FILE_PATH)
-        st.session_state.page = "List"
-        st.rerun()
-
-    if col2.button("キャンセル"):
-        st.session_state.page = "List"
-        st.rerun()
 
 # ============================
 # 10. ログイン処理
@@ -477,7 +414,7 @@ token = auth_result
 st.session_state.token = token
 
 # ============================
-# 11. OneDrive 読み込み
+# 11. OneDrive 読み込み（高速化）
 # ============================
 if "sheets" not in st.session_state:
     st.session_state.sheets = read_workbook_from_onedrive(token, FILE_PATH)
@@ -522,9 +459,3 @@ elif st.session_state.page == "Input":
 
 elif st.session_state.page == "List":
     list_page(sheet2)
-
-elif st.session_state.page == "Edit":
-    edit_page(sheet2, sheets, token)
-
-elif st.session_state.page == "DeleteConfirm":
-    delete_confirm_page(sheet2, sheets, token)
