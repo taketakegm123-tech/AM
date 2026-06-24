@@ -170,20 +170,27 @@ def dashboard(sheet1, sheet2):
         "invest": "投資"
     }
 
+    TYPE_COLOR = {
+        "bank": "#dbeafe",   # 薄い青
+        "cash": "#dcfce7",   # 薄い緑
+        "invest": "#fde2e4"  # 薄いピンク
+    }
+
+    # CSS（行間をさらに詰め、枠線だけ黒に）
     st.markdown(
         """
         <style>
         .big-card {
-            padding: 12px;
+            padding: 8px 12px;
             border-radius: 12px;
-            background-color: #0f172a;
-            color: white;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            border: 2px solid #0f172a;
+            background-color: transparent;
+            color: #0f172a;
             text-align: center;
             margin-bottom: 16px;
         }
-        .big-card h1 { font-size: 26px; margin: 0; }
-        .big-card h2 { font-size: 16px; margin: 2px 0; }
+        .big-card h1 { font-size: 24px; margin: 0; line-height: 1.1; }
+        .big-card h2 { font-size: 14px; margin: 0; line-height: 1.1; }
 
         .cat-title {
             font-weight: bold;
@@ -191,22 +198,24 @@ def dashboard(sheet1, sheet2):
             margin-bottom: 4px;
         }
         .cat-box {
-            background: #1e293b;
-            padding: 10px;
+            padding: 8px;
             border-radius: 8px;
-            color: white;
             margin-bottom: 8px;
+            border: 1px solid #ccc;
         }
         </style>
         """,
         unsafe_allow_html=True,
     )
 
+    # 計算
     current_total, history = calc_total_and_history(sheet1, sheet2)
     diff_day, diff_month = calc_diff(current_total, history)
 
+    # タイトル（1回だけ）
     st.title("資産管理")
 
+    # 総資産カード（枠線だけ黒・行間詰め）
     st.markdown(
         f"""
         <div class="big-card">
@@ -218,6 +227,7 @@ def dashboard(sheet1, sheet2):
         unsafe_allow_html=True,
     )
 
+    # カテゴリ別資産（3カラム）
     st.subheader("カテゴリ別資産")
 
     col_bank, col_cash, col_invest = st.columns(3)
@@ -231,7 +241,7 @@ def dashboard(sheet1, sheet2):
             for _, row in df_cat.iterrows():
                 st.markdown(
                     f"""
-                    <div class="cat-box">
+                    <div class="cat-box" style="background-color:{TYPE_COLOR[t]};">
                         {row['name']}<br>
                         ¥{row['balance']:,.0f}
                     </div>
@@ -239,6 +249,7 @@ def dashboard(sheet1, sheet2):
                     unsafe_allow_html=True,
                 )
 
+    # 資産推移グラフ
     st.subheader("資産推移（概算）")
     st.line_chart(history.set_index("date")["total"])
 
