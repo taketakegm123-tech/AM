@@ -299,19 +299,19 @@ st.markdown(
         left: 0;
         width: 100%;
         background-color: #f5f5f5;
-        padding: 12px 0 6px 0;
+        padding: 8px 0 4px 0;
         z-index: 9999;
         text-align: center;
         border-bottom: 1px solid #ddd;
     }
     .header-title {
-        font-size: 28px !important;
+        font-size: 26px !important;
         font-weight: 700 !important;
         color: #555 !important;
-        margin-bottom: 8px !important;
+        margin-bottom: 6px !important;
     }
     .menu-buttons button {
-        margin: 0 6px;
+        margin: 0 4px;
         padding: 6px 12px;
         font-size: 16px;
         border-radius: 6px;
@@ -324,10 +324,29 @@ st.markdown(
         border-color: #b48cff;
         font-weight: 700;
     }
+    /* ★ 余白を詰める：150px → 80px に変更 ★ */
     .content {
-        margin-top: 150px;
+        margin-top: 80px;
     }
     </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# タイトル＋メニューを固定ヘッダー内に表示
+st.markdown(
+    f"""
+    <div class="fixed-header">
+        <div class="header-title">資産管理メニュー</div>
+        <div class="menu-buttons">
+            <form>
+                <button name="page" value="Dashboard" class="{ 'active' if st.session_state.page=='Dashboard' else '' }">🏠 Dashboard</button>
+                <button name="page" value="Input" class="{ 'active' if st.session_state.page=='Input' else '' }">➕ Input</button>
+                <button name="page" value="List" class="{ 'active' if st.session_state.page=='List' else '' }">📄 List</button>
+                <button name="page" value="Charts" class="{ 'active' if st.session_state.page=='Charts' else '' }">📊 Charts</button>
+            </form>
+        </div>
+    </div>
     """,
     unsafe_allow_html=True,
 )
