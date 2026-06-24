@@ -264,18 +264,27 @@ if not auth_result:
 
     login_url = get_token(show_login_ui=True)
 
-    if st.button("Microsoft にログイン"):
-        if login_url:
-            st.markdown(
-                f"""
-                <script>
-                    window.location.href = "{login_url}";
-                </script>
-                """,
-                unsafe_allow_html=True,
-            )
+    # ★★★ スマホでも確実に動く “即時リダイレクト方式” ★★★
+    st.markdown(
+        f"""
+        <a href="{login_url}">
+            <button style="
+                padding: 10px 20px;
+                font-size: 18px;
+                background-color: #4a90e2;
+                color: white;
+                border: none;
+                border-radius: 6px;
+            ">
+                Microsoft にログイン
+            </button>
+        </a>
+        """,
+        unsafe_allow_html=True,
+    )
 
     st.stop()
+
 
 # ★★★ ログイン後 ★★★
 token = auth_result
