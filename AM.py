@@ -99,7 +99,7 @@ def write_workbook_to_onedrive(access_token, file_path, sheets_dict):
     return response.status_code in [200, 201]
 
 # ============================
-# 4. Dashboard 計算ロジック
+# 4. Dashboard 計算ロジック（資産名で判定するよう修正済み）
 # ============================
 def calc_total_and_history(sheet1, sheet2):
     sheet1 = sheet1.copy()
@@ -109,14 +109,17 @@ def calc_total_and_history(sheet1, sheet2):
     sheet2["date"] = pd.to_datetime(sheet2["date"])
 
     current_total = sheet1["balance"].sum()
-    asset_types = sheet1["type"].unique().tolist()
+
+    # ✔ 資産名で判定（重要修正）
+    asset_names = sheet1["name"].tolist()
 
     def row_delta(row):
         f = row["from"]
         t = row["to"]
         amt = row["amount"]
-        f_is_asset = f in asset_types
-        t_is_asset = t in asset_types
+
+        f_is_asset = f in asset_names
+        t_is_asset = t in asset_names
 
         if f_is_asset and t_is_asset:
             return 0
@@ -232,7 +235,7 @@ def dashboard_page(sheet1, sheet2):
     st.line_chart(history.set_index("date")["total"])
 
 # ============================
-# 6. Input ページ（支出・収入フレーム）
+# 6. Input ページ（支出・収入）
 # ============================
 def input_page(sheet1, sheet2, sheets, token):
 
@@ -256,7 +259,7 @@ def input_page(sheet1, sheet2, sheets, token):
     default_wallet_index = asset_list.index("財布") if "財布" in asset_list else 0
 
     # ============================
-    # 🟥 支出フレーム
+    # 支出
     # ============================
     with st.container(border=True):
         st.subheader("支出")
@@ -292,7 +295,6 @@ def input_page(sheet1, sheet2, sheets, token):
             if write_workbook_to_onedrive(token, FILE_PATH, sheets):
                 st.session_state.sheets = read_workbook_from_onedrive(token, FILE_PATH)
 
-                # 🔧 安全なリセット方法
                 for key, val in {
                     "exp_date": datetime.today().date(),
                     "exp_amount": "",
@@ -305,7 +307,7 @@ def input_page(sheet1, sheet2, sheets, token):
                 st.rerun()
 
     # ============================
-    # 🟦 収入フレーム
+    # 収入
     # ============================
     with st.container(border=True):
         st.subheader("収入")
@@ -353,7 +355,7 @@ def input_page(sheet1, sheet2, sheets, token):
                 st.rerun()
 
 # ============================
-# 7. List ページ（1 行表示＋区分＋メモ編集＋削除確認）
+# 7. List ページ（新しい順＋横並び＋編集＋削除確認）
 # ============================
 def list_page(sheet2):
     st.subheader("履歴一覧")
@@ -371,32 +373,29 @@ def list_page(sheet2):
     df["date_display"] = df["date"].dt.strftime("%Y-%m-%d") + "（" + df["weekday"] + "）"
     df["type"] = df["amount"].apply(lambda x: "支出" if x < 0 else "収入")
 
-    # 表示用データフレーム（1 行表示）
-    display_df = df[["date_display", "type", "from", "to", "amount", "memo"]].copy()
+    # ✔ 新しい順
+    df = df.sort_values("date", ascending=False).reset_index(drop=True)
 
-    # 編集・削除ボタンのキーを埋め込む
-    display_df["編集"] = [f"edit_{i}" for i in display_df.index]
-    display_df["削除"] = [f"delete_{i}" for i in display_df.index]
-
-    st.dataframe(display_df, use_container_width=True)
-
-    # ボタン処理
     for i, row in df.iterrows():
+        with st.container(border=True):
+            col1, col2, col3, col4, col5, col6, col7, col8 = st.columns([2,1,2,2,1,2,1,1])
 
-        if st.button("編集", key=f"edit_{i}"):
-            st.session_state.edit_index = i
-            st.session_state.edit_memo = row["memo"]
-            st.session_state.page = "Edit"
-            st.rerun()
+            col1.write(row["date_display"])
+            col2.write(row["type"])
+            col3.write(row["from"])
+            col4.write(row["to"])
+            col5.write(f"¥{row['amount']:,.0f}")
+            col6.write(row["memo"])
 
-        if st.button("削除", key=f"delete_{i}"):
-            if st.confirm("本当に削除しますか？"):
-                df2 = df.drop(i)
-                df2 = df2.drop(columns=["weekday", "date_display", "type"])
-                sheets = st.session_state.sheets
-                sheets["Sheet2"] = df2
-                write_workbook_to_onedrive(st.session_state.token, FILE_PATH, sheets)
-                st.session_state.sheets = read_workbook_from_onedrive(st.session_state.token, FILE_PATH)
+            if col7.button("編集", key=f"edit_{i}"):
+                st.session_state.edit_index = i
+                st.session_state.edit_memo = row["memo"]
+                st.session_state.page = "Edit"
+                st.rerun()
+
+            if col8.button("削除", key=f"delete_{i}"):
+                st.session_state.delete_index = i
+                st.session_state.page = "DeleteConfirm"
                 st.rerun()
 
 # ============================
@@ -427,7 +426,31 @@ def edit_page(sheet2, sheets, token):
         st.rerun()
 
 # ============================
-# 9. ログイン処理
+# 9. 削除確認ページ
+# ============================
+def delete_confirm_page(sheet2, sheets, token):
+    st.subheader("削除確認")
+
+    idx = st.session_state.delete_index
+    st.write("本当に削除しますか？")
+
+    col1, col2 = st.columns(2)
+
+    if col1.button("はい、削除する"):
+        df = sheet2.copy()
+        df = df.drop(idx).reset_index(drop=True)
+        sheets["Sheet2"] = df
+        write_workbook_to_onedrive(token, FILE_PATH, sheets)
+        st.session_state.sheets = read_workbook_from_onedrive(token, FILE_PATH)
+        st.session_state.page = "List"
+        st.rerun()
+
+    if col2.button("キャンセル"):
+        st.session_state.page = "List"
+        st.rerun()
+
+# ============================
+# 10. ログイン処理
 # ============================
 auth_result = get_token(show_login_ui=False)
 
@@ -461,7 +484,7 @@ token = auth_result
 st.session_state.token = token
 
 # ============================
-# 10. OneDrive 読み込み（高速化）
+# 11. OneDrive 読み込み（高速化）
 # ============================
 if "sheets" not in st.session_state:
     st.session_state.sheets = read_workbook_from_onedrive(token, FILE_PATH)
@@ -482,7 +505,7 @@ if len(sheet2.columns) > len(expected_cols):
 sheet2.columns = expected_cols
 
 # ============================
-# 11. メニュー
+# 12. メニュー
 # ============================
 if "page" not in st.session_state:
     st.session_state.page = "Dashboard"
@@ -496,7 +519,7 @@ menu = st.radio(
 st.session_state.page = menu
 
 # ============================
-# 12. ページ切り替え
+# 13. ページ切り替え
 # ============================
 if st.session_state.page == "Dashboard":
     dashboard_page(sheet1, sheet2)
@@ -509,3 +532,6 @@ elif st.session_state.page == "List":
 
 elif st.session_state.page == "Edit":
     edit_page(sheet2, sheets, token)
+
+elif st.session_state.page == "DeleteConfirm":
+    delete_confirm_page(sheet2, sheets, token)
