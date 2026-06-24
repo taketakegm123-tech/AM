@@ -160,14 +160,21 @@ def calc_diff(current_total, history):
     return current_total - yesterday_total, current_total - last_month_total
 
 # ============================
-# 5. スマホ最適化 Dashboard UI
+# 5. スマホ最適化 Dashboard UI（完全版）
 # ============================
 def dashboard(sheet1, sheet2):
+
+    TYPE_JP = {
+        "bank": "銀行",
+        "cash": "現金",
+        "invest": "投資"
+    }
+
     st.markdown(
         """
         <style>
         .big-card {
-            padding: 16px;
+            padding: 12px;
             border-radius: 12px;
             background-color: #0f172a;
             color: white;
@@ -175,19 +182,20 @@ def dashboard(sheet1, sheet2):
             text-align: center;
             margin-bottom: 16px;
         }
-        .big-card h1 { font-size: 28px; margin: 0; }
-        .big-card h2 { font-size: 18px; margin: 4px 0; }
-        .small-card {
-            padding: 12px;
-            border-radius: 10px;
-            background-color: #1e293b;
-            color: white;
-            margin-right: 8px;
-            min-width: 140px;
+        .big-card h1 { font-size: 26px; margin: 0; }
+        .big-card h2 { font-size: 16px; margin: 2px 0; }
+
+        .cat-title {
+            font-weight: bold;
+            font-size: 18px;
+            margin-bottom: 4px;
         }
-        .scroll-row {
-            display: flex;
-            overflow-x: auto;
+        .cat-box {
+            background: #1e293b;
+            padding: 10px;
+            border-radius: 8px;
+            color: white;
+            margin-bottom: 8px;
         }
         </style>
         """,
@@ -196,6 +204,8 @@ def dashboard(sheet1, sheet2):
 
     current_total, history = calc_total_and_history(sheet1, sheet2)
     diff_day, diff_month = calc_diff(current_total, history)
+
+    st.title("資産管理")
 
     st.markdown(
         f"""
@@ -208,27 +218,34 @@ def dashboard(sheet1, sheet2):
         unsafe_allow_html=True,
     )
 
-    st.markdown("#### カテゴリ別資産")
-    cat_summary = sheet1.groupby("type")["balance"].sum().reset_index()
+    st.subheader("カテゴリ別資産")
 
-    cards_html = '<div class="scroll-row">'
-    for _, row in cat_summary.iterrows():
-        cards_html += f"""
-        <div class="small-card">
-            <h3>{row['type']}</h3>
-            <p>¥{row['balance']:,.0f}</p>
-        </div>
-        """
-    cards_html += "</div>"
-    st.markdown(cards_html, unsafe_allow_html=True)
+    col_bank, col_cash, col_invest = st.columns(3)
 
-    st.markdown("#### 資産推移（概算）")
+    for col, t in zip([col_bank, col_cash, col_invest], ["bank", "cash", "invest"]):
+        with col:
+            st.markdown(f"<div class='cat-title'>{TYPE_JP[t]}</div>", unsafe_allow_html=True)
+
+            df_cat = sheet1[sheet1["type"] == t]
+
+            for _, row in df_cat.iterrows():
+                st.markdown(
+                    f"""
+                    <div class="cat-box">
+                        {row['name']}<br>
+                        ¥{row['balance']:,.0f}
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+    st.subheader("資産推移（概算）")
     st.line_chart(history.set_index("date")["total"])
 
 # ============================
 # 6. メイン UI
 # ============================
-st.title("クラウド資産管理アプリ（OneDrive 連携版）")
+st.title("資産管理")
 
 token = get_token()
 if not token:
