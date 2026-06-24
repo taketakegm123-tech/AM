@@ -170,48 +170,42 @@ def dashboard(sheet1, sheet2):
     }
 
     st.markdown(
-    """
-    <style>
-    .fixed-header {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        background-color: #f5f5f5;
-        padding: 14px 0 10px 0;   /* ← タイトルが見えるように高さUP */
-        z-index: 9999;
-        text-align: center;
-        border-bottom: 1px solid #ddd;
-    }
-    .header-title {
-        font-size: 26px !important;
-        font-weight: 700 !important;
-        color: #555 !important;
-        margin-bottom: 8px !important;
-    }
-    .menu-buttons button {
-        margin: 0 4px;
-        padding: 6px 12px;
-        font-size: 16px;
-        border-radius: 6px;
-        border: 1px solid #aaa;
-        background-color: white;
-        color: #555;
-    }
-    .menu-buttons button.active {
-        background-color: #e9d5ff;
-        border-color: #b48cff;
-        font-weight: 700;
-    }
-
-    /* ★ 余白をさらに詰める：90px → 60px ★ */
-    .content {
-        margin-top: 60px;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+        """
+        <style>
+        .subtitle {
+            font-size: 26px !important;
+            font-weight: 700 !important;
+            color: #555 !important;
+            margin: 20px 0 10px 0 !important;
+        }
+        .big-card {
+            padding: 16px;
+            border-radius: 12px;
+            background-color: #e9d5ff !important;
+            border: 1px solid #aaa;
+            color: #555 !important;
+            text-align: center;
+            margin-bottom: 16px;
+        }
+        .big-card h1 {
+            font-size: 22px !important;
+            margin: 0 !important;
+        }
+        .big-card h2 {
+            font-size: 14px !important;
+            margin: 0 !important;
+        }
+        .cat-box {
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #aaa;
+            color: #555 !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
     current_total, history = calc_total_and_history(sheet1, sheet2)
     diff_day, diff_month = calc_diff(current_total, history)
@@ -309,7 +303,7 @@ st.markdown(
         left: 0;
         width: 100%;
         background-color: #f5f5f5;
-        padding: 8px 0 4px 0;
+        padding: 16px 0 10px 0;
         z-index: 9999;
         text-align: center;
         border-bottom: 1px solid #ddd;
@@ -318,7 +312,7 @@ st.markdown(
         font-size: 26px !important;
         font-weight: 700 !important;
         color: #555 !important;
-        margin-bottom: 6px !important;
+        margin-bottom: 8px !important;
     }
     .menu-buttons button {
         margin: 0 4px;
@@ -335,7 +329,7 @@ st.markdown(
         font-weight: 700;
     }
     .content {
-        margin-top: 90px;
+        margin-top: 40px;
     }
     </style>
     """,
