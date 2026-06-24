@@ -293,7 +293,7 @@ if not auth_result:
 # ★★★ ログイン後 ★★★
 token = auth_result
 
-# 固定ヘッダー
+# 固定ヘッダー（タイトル左・タブ右）
 st.markdown(
     """
     <style>
@@ -303,21 +303,23 @@ st.markdown(
         left: 0;
         width: 100%;
         background-color: #f5f5f5;
-        padding: 16px 0 10px 0;
+        padding: 10px 12px;
         z-index: 9999;
-        text-align: center;
         border-bottom: 1px solid #ddd;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
     }
     .header-title {
-        font-size: 26px !important;
+        font-size: 22px !important;
         font-weight: 700 !important;
         color: #555 !important;
-        margin-bottom: 8px !important;
+        white-space: nowrap;
     }
     .menu-buttons button {
         margin: 0 4px;
         padding: 6px 12px;
-        font-size: 16px;
+        font-size: 15px;
         border-radius: 6px;
         border: 1px solid #aaa;
         background-color: white;
@@ -329,14 +331,13 @@ st.markdown(
         font-weight: 700;
     }
     .content {
-        margin-top: 40px;
+        margin-top: 20px;
     }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-# 固定ヘッダー HTML
 st.markdown(
     f"""
     <div class="fixed-header">
