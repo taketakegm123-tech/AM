@@ -241,6 +241,11 @@ def dashboard(sheet1, sheet2):
 # ============================
 # 6. メイン UI（固定ヘッダー＋ログイン前後）
 # ============================
+
+# ★ ページ初期化（固定ヘッダーより前に必ず置く）
+if "page" not in st.session_state:
+    st.session_state.page = "Dashboard"
+
 auth_result = get_token(show_login_ui=False)
 
 # ★★★ ログイン前画面 ★★★
@@ -264,7 +269,6 @@ if not auth_result:
 
     login_url = get_token(show_login_ui=True)
 
-    # ★★★ スマホでも確実に動く “即時リダイレクト方式” ★★★
     st.markdown(
         f"""
         <a href="{login_url}">
@@ -284,7 +288,6 @@ if not auth_result:
     )
 
     st.stop()
-
 
 # ★★★ ログイン後 ★★★
 token = auth_result
@@ -324,37 +327,15 @@ st.markdown(
         border-color: #b48cff;
         font-weight: 700;
     }
-    /* ★ 余白を詰める：150px → 80px に変更 ★ */
     .content {
-        margin-top: 80px;
+        margin-top: 90px;
     }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-# タイトル＋メニューを固定ヘッダー内に表示
-st.markdown(
-    f"""
-    <div class="fixed-header">
-        <div class="header-title">資産管理メニュー</div>
-        <div class="menu-buttons">
-            <form>
-                <button name="page" value="Dashboard" class="{ 'active' if st.session_state.page=='Dashboard' else '' }">🏠 Dashboard</button>
-                <button name="page" value="Input" class="{ 'active' if st.session_state.page=='Input' else '' }">➕ Input</button>
-                <button name="page" value="List" class="{ 'active' if st.session_state.page=='List' else '' }">📄 List</button>
-                <button name="page" value="Charts" class="{ 'active' if st.session_state.page=='Charts' else '' }">📊 Charts</button>
-            </form>
-        </div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
-# タブ切り替え（HTML ボタン）
-if "page" not in st.session_state:
-    st.session_state.page = "Dashboard"
-
+# 固定ヘッダー HTML
 st.markdown(
     f"""
     <div class="fixed-header">
