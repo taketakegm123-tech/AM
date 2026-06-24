@@ -39,14 +39,14 @@ def get_token():
     cache = load_cache()
     app = build_msal_app(cache)
 
-    # 既存トークンがあればサイレント取得
+    # 既存トークン
     accounts = app.get_accounts()
     if accounts:
         result = app.acquire_token_silent(SCOPE, account=accounts[0])
         if result and "access_token" in result:
             return result["access_token"]
 
-    # クエリパラメータから code を取得（リダイレクト後）
+    # クエリパラメータから code を取得
     raw_params = st.query_params
     query_params = dict(raw_params)
 
@@ -61,7 +61,7 @@ def get_token():
             save_cache(cache)
             return result["access_token"]
 
-    # ここまで来たら未ログインなのでリンクを表示
+    # 未ログイン時のみリンク表示
     auth_url = app.get_authorization_request_url(SCOPE, redirect_uri=REDIRECT_URI)
     st.markdown(f"[ここをクリックして Microsoft にログインする]({auth_url})")
     return None
@@ -109,7 +109,6 @@ def write_workbook_to_onedrive(access_token, file_path, sheets_dict):
 # 4. Dashboard 計算ロジック
 # ============================
 def calc_total_and_history(sheet1, sheet2):
-    # 列名を想定通りに揃える
     sheet1 = sheet1.copy()
     sheet2 = sheet2.copy()
     sheet1.columns = ["type", "name", "balance"]
@@ -126,13 +125,10 @@ def calc_total_and_history(sheet1, sheet2):
         f_is_asset = f in asset_types
         t_is_asset = t in asset_types
 
-        # 振替：総資産変化なし
         if f_is_asset and t_is_asset:
             return 0
-        # 支出：資産 → 費目
         if f_is_asset and not t_is_asset:
             return -amt
-        # 収入：収入源 → 資産
         if not f_is_asset and t_is_asset:
             return +amt
         return 0
@@ -170,7 +166,7 @@ def calc_diff(current_total, history):
     return current_total - yesterday_total, current_total - last_month_total
 
 # ============================
-# 5. スマホ最適化 Dashboard UI（完全版）
+# 5. Dashboard UI（完全版）
 # ============================
 def dashboard(sheet1, sheet2):
 
@@ -181,36 +177,38 @@ def dashboard(sheet1, sheet2):
     }
 
     TYPE_COLOR = {
-        "bank": "#dbeafe",   # 薄い青
-        "cash": "#dcfce7",   # 薄い緑
-        "invest": "#fde2e4"  # 薄いピンク
+        "bank": "#dbeafe",
+        "cash": "#dcfce7",
+        "invest": "#fde2e4"
     }
 
     st.markdown(
         """
         <style>
+        .title-custom {
+            font-size: 22px !important;
+            font-weight: 600 !important;
+            color: #555 !important;
+            margin-bottom: 6px !important;
+        }
         .big-card {
-            padding: 6px 10px !important;
+            padding: 10px 12px !important;
             border-radius: 12px;
-            border: 2px solid #0f172a;
-            background-color: transparent !important;
-            color: #0f172a !important;
+            background-color: #e9d5ff !important;
+            color: #333 !important;
             text-align: center;
             margin-bottom: 12px;
         }
         .big-card h1 {
             font-size: 22px !important;
             margin: 0 !important;
-            line-height: 1.0 !important;
-            padding: 0 !important;
+            line-height: 1.1 !important;
         }
         .big-card h2 {
             font-size: 14px !important;
             margin: 0 !important;
-            line-height: 1.0 !important;
-            padding: 0 !important;
+            line-height: 1.1 !important;
         }
-
         .cat-title {
             font-weight: bold;
             font-size: 18px;
@@ -230,14 +228,13 @@ def dashboard(sheet1, sheet2):
     current_total, history = calc_total_and_history(sheet1, sheet2)
     diff_day, diff_month = calc_diff(current_total, history)
 
-    st.title("資産管理")
+    st.markdown("<div class='title-custom'>資産管理</div>", unsafe_allow_html=True)
 
     st.markdown(
         f"""
         <div class="big-card">
             <h1>総資産：¥{current_total:,.0f}</h1>
-            <h2>前日比：{('+' if diff_day >= 0 else '')}¥{diff_day:,.0f}</h2>
-            <h2>前月比：{('+' if diff_month >= 0 else '')}¥{diff_month:,.0f}</h2>
+            <h2>前日比：{('+' if diff_day >= 0 else '')}¥{diff_day:,.0f} ｜ 前月比：{('+' if diff_month >= 0 else '')}¥{diff_month:,.0f}</h2>
         </div>
         """,
         unsafe_allow_html=True,
@@ -272,7 +269,6 @@ def dashboard(sheet1, sheet2):
 # ============================
 token = get_token()
 if not token:
-    st.info("ログインしてください。")
     st.stop()
 
 sheets = read_workbook_from_onedrive(token, FILE_PATH)
