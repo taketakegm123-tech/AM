@@ -60,8 +60,7 @@ def get_token(show_login_ui=True):
             return result["access_token"]
 
     if show_login_ui:
-        auth_url = app.get_authorization_request_url(SCOPE, redirect_uri=REDIRECT_URI)
-        return auth_url
+        return app.get_authorization_request_url(SCOPE, redirect_uri=REDIRECT_URI)
 
     return None
 
@@ -97,12 +96,7 @@ def write_workbook_to_onedrive(access_token, file_path, sheets_dict):
 
     response = requests.put(url, headers=headers, data=output.read())
 
-    if response.status_code in [200, 201]:
-        return True
-    else:
-        st.error("書き込みに失敗しました")
-        st.write(response.text)
-        return False
+    return response.status_code in [200, 201]
 
 # ============================
 # 4. Dashboard 計算ロジック
@@ -169,12 +163,6 @@ def calc_diff(current_total, history):
 # ============================
 def dashboard(sheet1, sheet2):
 
-    TYPE_JP = {
-        "bank": "銀行",
-        "cash": "現金",
-        "invest": "投資"
-    }
-
     TYPE_COLOR = {
         "bank": "#dbeafe",
         "cash": "#dcfce7",
@@ -185,33 +173,31 @@ def dashboard(sheet1, sheet2):
         """
         <style>
         .subtitle {
-            font-size: 22px !important;
-            font-weight: 600 !important;
+            font-size: 26px !important;
+            font-weight: 700 !important;
             color: #555 !important;
-            margin: 12px 0 6px 0 !important;
+            margin: 20px 0 10px 0 !important;
         }
         .big-card {
-            padding: 10px 12px !important;
+            padding: 12px;
             border-radius: 12px;
             background-color: #e9d5ff !important;
             color: #555 !important;
             text-align: center;
-            margin-bottom: 12px;
+            margin-bottom: 16px;
         }
         .big-card h1 {
-            font-size: 20px !important;
+            font-size: 22px !important;
             margin: 0 !important;
-            color: #555 !important;
         }
         .big-card h2 {
             font-size: 14px !important;
             margin: 0 !important;
-            color: #555 !important;
         }
         .cat-box {
-            padding: 8px;
+            padding: 10px;
             border-radius: 8px;
-            margin-bottom: 8px;
+            margin-bottom: 10px;
             border: 1px solid #ccc;
             color: #555 !important;
         }
@@ -235,22 +221,19 @@ def dashboard(sheet1, sheet2):
 
     st.markdown("<div class='subtitle'>カテゴリ別資産</div>", unsafe_allow_html=True)
 
-    col_bank, col_cash, col_invest = st.columns(3)
-
-    for col, t in zip([col_bank, col_cash, col_invest], ["bank", "cash", "invest"]):
-        with col:
-            df_cat = sheet1[sheet1["type"] == t]
-
-            for _, row in df_cat.iterrows():
-                st.markdown(
-                    f"""
-                    <div class="cat-box" style="background-color:{TYPE_COLOR[t]};">
-                        {row['name']}<br>
-                        ¥{row['balance']:,.0f}
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
+    col1, col2, col3 = st.columns(3)
+    for col, t in zip([col1, col2, col3], ["bank", "cash", "invest"]):
+        df_cat = sheet1[sheet1["type"] == t]
+        for _, row in df_cat.iterrows():
+            col.markdown(
+                f"""
+                <div class="cat-box" style="background-color:{TYPE_COLOR[t]};">
+                    {row['name']}<br>
+                    ¥{row['balance']:,.0f}
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
     st.markdown("<div class='subtitle'>資産推移（概算）</div>", unsafe_allow_html=True)
     st.line_chart(history.set_index("date")["total"])
@@ -262,11 +245,12 @@ auth_result = get_token(show_login_ui=False)
 
 # ★★★ ログイン前画面 ★★★
 if not auth_result:
+
     st.markdown(
         """
         <style>
         .login-title {
-            font-size: 26px !important;
+            font-size: 28px !important;
             font-weight: 700 !important;
             color: #555 !important;
             margin-bottom: 20px !important;
@@ -281,7 +265,15 @@ if not auth_result:
     login_url = get_token(show_login_ui=True)
 
     if st.button("Microsoft にログイン"):
-        st.markdown(f"[ログインはこちら]({login_url})", unsafe_allow_html=True)
+        if login_url:
+            st.markdown(
+                f"""
+                <script>
+                    window.location.href = "{login_url}";
+                </script>
+                """,
+                unsafe_allow_html=True,
+            )
 
     st.stop()
 
@@ -298,40 +290,64 @@ st.markdown(
         left: 0;
         width: 100%;
         background-color: #f5f5f5;
-        padding: 10px 0 5px 0;
+        padding: 12px 0 6px 0;
         z-index: 9999;
         text-align: center;
         border-bottom: 1px solid #ddd;
     }
     .header-title {
-        font-size: 26px !important;
+        font-size: 28px !important;
         font-weight: 700 !important;
         color: #555 !important;
-        margin-bottom: 6px !important;
+        margin-bottom: 8px !important;
+    }
+    .menu-buttons button {
+        margin: 0 6px;
+        padding: 6px 12px;
+        font-size: 16px;
+        border-radius: 6px;
+        border: 1px solid #aaa;
+        background-color: white;
+        color: #555;
+    }
+    .menu-buttons button.active {
+        background-color: #e9d5ff;
+        border-color: #b48cff;
+        font-weight: 700;
     }
     .content {
-        margin-top: 120px;
+        margin-top: 150px;
     }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
+# タブ切り替え（HTML ボタン）
+if "page" not in st.session_state:
+    st.session_state.page = "Dashboard"
+
 st.markdown(
-    """
+    f"""
     <div class="fixed-header">
         <div class="header-title">資産管理メニュー</div>
+        <div class="menu-buttons">
+            <form>
+                <button name="page" value="Dashboard" class="{ 'active' if st.session_state.page=='Dashboard' else '' }">🏠 Dashboard</button>
+                <button name="page" value="Input" class="{ 'active' if st.session_state.page=='Input' else '' }">➕ Input</button>
+                <button name="page" value="List" class="{ 'active' if st.session_state.page=='List' else '' }">📄 List</button>
+                <button name="page" value="Charts" class="{ 'active' if st.session_state.page=='Charts' else '' }">📊 Charts</button>
+            </form>
+        </div>
     </div>
     """,
     unsafe_allow_html=True,
 )
 
-# メニュー（固定ヘッダーの下に表示）
-menu = st.radio(
-    "",
-    ["🏠 Dashboard", "➕ Input", "📄 List", "📊 Charts"],
-    horizontal=True,
-)
+# ページ切り替え処理
+params = st.query_params
+if "page" in params:
+    st.session_state.page = params["page"]
 
 st.markdown('<div class="content">', unsafe_allow_html=True)
 
@@ -343,11 +359,11 @@ if sheets is None:
 sheet1 = sheets["Sheet1"]
 sheet2 = sheets["Sheet2"]
 
-# メニュー分岐
-if menu == "🏠 Dashboard":
+# ページ分岐
+if st.session_state.page == "Dashboard":
     dashboard(sheet1, sheet2)
 
-elif menu == "➕ Input":
+elif st.session_state.page == "Input":
     st.markdown("<div class='subtitle'>新しい仕訳を追加</div>", unsafe_allow_html=True)
 
     sheet2 = sheet2.copy()
@@ -373,18 +389,17 @@ elif menu == "➕ Input":
         }
         df_updated = pd.concat([sheet2, pd.DataFrame([new_row])], ignore_index=True)
         sheets["Sheet2"] = df_updated
-        ok = write_workbook_to_onedrive(token, FILE_PATH, sheets)
-        if ok:
+        if write_workbook_to_onedrive(token, FILE_PATH, sheets):
             st.success("OneDrive の Excel に保存しました。")
             st.experimental_rerun()
 
-elif menu == "📄 List":
+elif st.session_state.page == "List":
     st.markdown("<div class='subtitle'>履歴一覧</div>", unsafe_allow_html=True)
     sheet2 = sheet2.copy()
     sheet2.columns = ["date", "from", "to", "amount", "memo"]
     st.dataframe(sheet2)
 
-elif menu == "📊 Charts":
+elif st.session_state.page == "Charts":
     st.markdown("<div class='subtitle'>金額の推移</div>", unsafe_allow_html=True)
     sheet2 = sheet2.copy()
     sheet2.columns = ["date", "from", "to", "amount", "memo"]
