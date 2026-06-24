@@ -159,9 +159,8 @@ def calc_diff(current_total, history):
     return current_total - yesterday_total, current_total - last_month_total
 
 # ============================
-# 5. ページ UI
+# 5. Dashboard ページ
 # ============================
-
 def dashboard_page(sheet1, sheet2):
     current_total, history = calc_total_and_history(sheet1, sheet2)
     diff_day, diff_month = calc_diff(current_total, history)
@@ -232,54 +231,173 @@ def dashboard_page(sheet1, sheet2):
     st.markdown("<div class='subtitle'>資産推移（概算）</div>", unsafe_allow_html=True)
     st.line_chart(history.set_index("date")["total"])
 
-def input_page(sheet2, sheets, token):
-    st.markdown("<div class='subtitle'>新しい仕訳を追加</div>", unsafe_allow_html=True)
+# ============================
+# 6. Input ページ（支出・収入フレーム）
+# ============================
+def input_page(sheet1, sheet2, sheets, token):
 
-    sheet2_local = sheet2.copy()
-    sheet2_local.columns = ["date", "from", "to", "amount", "memo"]
+    # 初期化
+    defaults = {
+        "exp_date": datetime.today().date(),
+        "exp_amount": 0,
+        "exp_from": "財布",
+        "exp_to": "",
+        "inc_date": datetime.today().date(),
+        "inc_amount": 0,
+        "inc_from": "",
+        "inc_to": "財布",
+    }
+    for key, val in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = val
 
-    col1, col2 = st.columns(2)
-    with col1:
-        date = st.date_input("日付")
-    with col2:
-        amount = st.number_input("金額", step=100)
+    asset_list = sheet1["name"].tolist()
+    default_wallet_index = asset_list.index("財布") if "財布" in asset_list else 0
 
-    from_ = st.text_input("from（出金元）")
-    to_ = st.text_input("to（入金先／費目）")
-    memo = st.text_input("メモ")
+    # ============================
+    # 🟥 支出フレーム
+    # ============================
+    with st.container(border=True):
+        st.subheader("支出")
 
-    if st.button("仕訳を追加して保存"):
-        new_row = {
-            "date": date,
-            "from": from_,
-            "to": to_,
-            "amount": amount,
-            "memo": memo,
-        }
-        df_updated = pd.concat([sheet2_local, pd.DataFrame([new_row])], ignore_index=True)
-        sheets["Sheet2"] = df_updated
+        st.session_state.exp_date = st.date_input(
+            "日付",
+            value=st.session_state.exp_date,
+            key="exp_date_input"
+        )
 
-        if write_workbook_to_onedrive(token, FILE_PATH, sheets):
-            st.success("OneDrive の Excel に保存しました。")
-            st.rerun()
+        st.session_state.exp_amount = st.number_input(
+            "金額（プラスで入力）",
+            min_value=0,
+            step=100,
+            value=st.session_state.exp_amount,
+            key="exp_amount_input"
+        )
 
+        st.session_state.exp_from = st.selectbox(
+            "from（出金元）",
+            asset_list,
+            index=default_wallet_index,
+            key="exp_from_select"
+        )
+
+        st.session_state.exp_to = st.text_input(
+            "to（費目）",
+            value=st.session_state.exp_to,
+            key="exp_to_input"
+        )
+
+        if st.button("支出を入力"):
+            date = pd.to_datetime(st.session_state.exp_date)
+            amount = -abs(st.session_state.exp_amount)
+
+            new_row = {
+                "date": date,
+                "from": st.session_state.exp_from,
+                "to": st.session_state.exp_to,
+                "amount": amount,
+                "memo": ""
+            }
+
+            sheet2_local = sheet2.copy()
+            sheet2_local.columns = ["date", "from", "to", "amount", "memo"]
+            df_updated = pd.concat([sheet2_local, pd.DataFrame([new_row])], ignore_index=True)
+
+            sheets["Sheet2"] = df_updated
+
+            if write_workbook_to_onedrive(token, FILE_PATH, sheets):
+                st.session_state.sheets = read_workbook_from_onedrive(token, FILE_PATH)
+
+                st.session_state.exp_date = datetime.today().date()
+                st.session_state.exp_amount = 0
+                st.session_state.exp_from = "財布"
+                st.session_state.exp_to = ""
+
+                st.rerun()
+
+    # ============================
+    # 🟦 収入フレーム
+    # ============================
+    with st.container(border=True):
+        st.subheader("収入")
+
+        st.session_state.inc_date = st.date_input(
+            "日付",
+            value=st.session_state.inc_date,
+            key="inc_date_input"
+        )
+
+        st.session_state.inc_amount = st.number_input(
+            "金額（プラスで入力）",
+            min_value=0,
+            step=100,
+            value=st.session_state.inc_amount,
+            key="inc_amount_input"
+        )
+
+        st.session_state.inc_from = st.text_input(
+            "from（収入元）",
+            value=st.session_state.inc_from,
+            key="inc_from_input"
+        )
+
+        st.session_state.inc_to = st.selectbox(
+            "to（入金先資産）",
+            asset_list,
+            index=default_wallet_index,
+            key="inc_to_select"
+        )
+
+        if st.button("収入を入力"):
+            date = pd.to_datetime(st.session_state.inc_date)
+            amount = abs(st.session_state.inc_amount)
+
+            new_row = {
+                "date": date,
+                "from": st.session_state.inc_from,
+                "to": st.session_state.inc_to,
+                "amount": amount,
+                "memo": ""
+            }
+
+            sheet2_local = sheet2.copy()
+            sheet2_local.columns = ["date", "from", "to", "amount", "memo"]
+            df_updated = pd.concat([sheet2_local, pd.DataFrame([new_row])], ignore_index=True)
+
+            sheets["Sheet2"] = df_updated
+
+            if write_workbook_to_onedrive(token, FILE_PATH, sheets):
+                st.session_state.sheets = read_workbook_from_onedrive(token, FILE_PATH)
+
+                st.session_state.inc_date = datetime.today().date()
+                st.session_state.inc_amount = 0
+                st.session_state.inc_from = ""
+                st.session_state.inc_to = "財布"
+
+                st.rerun()
+
+# ============================
+# 7. List ページ
+# ============================
 def list_page(sheet2):
-    st.markdown("<div class='subtitle'>履歴一覧</div>", unsafe_allow_html=True)
+    st.subheader("履歴一覧")
     sheet2_local = sheet2.copy()
     sheet2_local.columns = ["date", "from", "to", "amount", "memo"]
     st.dataframe(sheet2_local)
 
+# ============================
+# 8. Charts ページ
+# ============================
 def charts_page(sheet2):
-    st.markdown("<div class='subtitle'>金額の推移</div>", unsafe_allow_html=True)
+    st.subheader("金額の推移")
     sheet2_local = sheet2.copy()
     sheet2_local.columns = ["date", "from", "to", "amount", "memo"]
     sheet2_local["date"] = pd.to_datetime(sheet2_local["date"])
     st.line_chart(sheet2_local.set_index("date")["amount"])
 
 # ============================
-# 6. ログイン処理
+# 9. ログイン処理
 # ============================
-
 auth_result = get_token(show_login_ui=False)
 
 if not auth_result:
@@ -311,9 +429,8 @@ if not auth_result:
 token = auth_result
 
 # ============================
-# 7. OneDrive 読み込み（高速化：最初の1回だけ）
+# 10. OneDrive 読み込み（高速化）
 # ============================
-
 if "sheets" not in st.session_state:
     st.session_state.sheets = read_workbook_from_onedrive(token, FILE_PATH)
 
@@ -322,9 +439,8 @@ sheet1 = sheets["Sheet1"]
 sheet2 = sheets["Sheet2"]
 
 # ============================
-# 8. メニュー（ラジオボタン）
+# 11. メニュー
 # ============================
-
 if "page" not in st.session_state:
     st.session_state.page = "Dashboard"
 
@@ -337,14 +453,13 @@ menu = st.radio(
 st.session_state.page = menu
 
 # ============================
-# 9. ページ切り替え
+# 12. ページ切り替え
 # ============================
-
 if st.session_state.page == "Dashboard":
     dashboard_page(sheet1, sheet2)
 
 elif st.session_state.page == "Input":
-    input_page(sheet2, sheets, token)
+    input_page(sheet1, sheet2, sheets, token)
 
 elif st.session_state.page == "List":
     list_page(sheet2)
