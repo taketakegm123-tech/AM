@@ -167,30 +167,35 @@ def dashboard_page(sheet1, sheet2):
     diff_day, diff_month = calc_diff(current_total, history)
 
     st.markdown(
-    """
-    <style>
-    .big-card {
-        padding: 10px;
-        border-radius: 10px;
-        background-color: #e9d5ff !important;
-        border: 1px solid #aaa;
-        color: #555 !important;
-        text-align: center;
-        margin-bottom: 12px;
-    }
-    .big-card h1 {
-        font-size: 18px !important;
-        margin: 0 !important;
-    }
-    .big-card h2 {
-        font-size: 12px !important;
-        margin: 0 !important;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
+        """
+        <style>
+        .big-card {
+            padding: 10px;
+            border-radius: 10px;
+            background-color: #e9d5ff !important;
+            border: 1px solid #aaa;
+            color: #555 !important;
+            text-align: center;
+            margin-bottom: 12px;
+        }
+        .big-card h1 {
+            font-size: 18px !important;
+            margin: 0 !important;
+        }
+        .big-card h2 {
+            font-size: 12px !important;
+            margin: 0 !important;
+        }
+        .subtitle {
+            font-size: 22px !important;
+            font-weight: 700 !important;
+            color: #555 !important;
+            margin: 20px 0 10px 0 !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
     st.markdown(
         f"""
@@ -279,37 +284,40 @@ auth_result = get_token(show_login_ui=False)
 
 if not auth_result:
     st.title("資産管理")
+
     login_url = get_token(show_login_ui=True)
+
     st.markdown(
-    f"""
-    <a href="{login_url}">
-        <button style="
-            padding: 10px 20px;
-            font-size: 18px;
-            background-color: #4a90e2;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-        ">
-            Microsoft にログイン
-        </button>
-    </a>
-    """,
-    unsafe_allow_html=True,
-   )
+        f"""
+        <a href="{login_url}">
+            <button style="
+                padding: 10px 20px;
+                font-size: 18px;
+                background-color: #4a90e2;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                cursor: pointer;
+            ">
+                Microsoft にログイン
+            </button>
+        </a>
+        """,
+        unsafe_allow_html=True,
+    )
+
     st.stop()
 
 token = auth_result
 
 # ============================
-# 7. OneDrive 読み込み
+# 7. OneDrive 読み込み（高速化：最初の1回だけ）
 # ============================
 
-sheets = read_workbook_from_onedrive(token, FILE_PATH)
-if sheets is None:
-    st.stop()
+if "sheets" not in st.session_state:
+    st.session_state.sheets = read_workbook_from_onedrive(token, FILE_PATH)
 
+sheets = st.session_state.sheets
 sheet1 = sheets["Sheet1"]
 sheet2 = sheets["Sheet2"]
 
@@ -324,7 +332,6 @@ menu = st.radio(
     "メニュー",
     ["Dashboard", "Input", "List", "Charts"],
     horizontal=True,
-    index=["Dashboard", "Input", "List", "Charts"].index(st.session_state.page)
 )
 
 st.session_state.page = menu
