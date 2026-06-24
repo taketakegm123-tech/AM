@@ -35,7 +35,7 @@ def build_msal_app(cache=None):
         token_cache=cache,
     )
 
-def get_token():
+def get_token(show_login_ui=True):
     cache = load_cache()
     app = build_msal_app(cache)
 
@@ -61,9 +61,11 @@ def get_token():
             save_cache(cache)
             return result["access_token"]
 
-    # 未ログイン時のみリンク表示
-    auth_url = app.get_authorization_request_url(SCOPE, redirect_uri=REDIRECT_URI)
-    st.markdown(f"[ここをクリックして Microsoft にログインする]({auth_url})")
+    # ログイン UI を返す
+    if show_login_ui:
+        auth_url = app.get_authorization_request_url(SCOPE, redirect_uri=REDIRECT_URI)
+        return auth_url
+
     return None
 
 # ============================
@@ -166,7 +168,7 @@ def calc_diff(current_total, history):
     return current_total - yesterday_total, current_total - last_month_total
 
 # ============================
-# 5. Dashboard UI（完全版）
+# 5. Dashboard UI
 # ============================
 def dashboard(sheet1, sheet2):
 
@@ -186,49 +188,53 @@ def dashboard(sheet1, sheet2):
         """
         <style>
         .title-custom {
-            font-size: 22px !important;
+            font-size: 20px !important;
             font-weight: 600 !important;
             color: #555 !important;
-            margin-bottom: 6px !important;
+            margin-bottom: 4px !important;
         }
         .big-card {
             padding: 10px 12px !important;
             border-radius: 12px;
             background-color: #e9d5ff !important;
-            color: #333 !important;
+            color: #555 !important;
             text-align: center;
             margin-bottom: 12px;
         }
         .big-card h1 {
-            font-size: 22px !important;
+            font-size: 20px !important;
             margin: 0 !important;
             line-height: 1.1 !important;
+            color: #555 !important;
         }
         .big-card h2 {
             font-size: 14px !important;
             margin: 0 !important;
             line-height: 1.1 !important;
+            color: #555 !important;
         }
         .cat-title {
             font-weight: bold;
             font-size: 18px;
             margin-bottom: 4px;
+            color: #555 !important;
         }
         .cat-box {
             padding: 8px;
             border-radius: 8px;
             margin-bottom: 8px;
             border: 1px solid #ccc;
+            color: #555 !important;
         }
         </style>
         """,
         unsafe_allow_html=True,
     )
 
+    st.markdown("<div class='title-custom'>資産管理</div>", unsafe_allow_html=True)
+
     current_total, history = calc_total_and_history(sheet1, sheet2)
     diff_day, diff_month = calc_diff(current_total, history)
-
-    st.markdown("<div class='title-custom'>資産管理</div>", unsafe_allow_html=True)
 
     st.markdown(
         f"""
@@ -265,11 +271,37 @@ def dashboard(sheet1, sheet2):
     st.line_chart(history.set_index("date")["total"])
 
 # ============================
-# 6. メイン UI（完全版）
+# 6. メイン UI（ログイン前後で分岐）
 # ============================
-token = get_token()
-if not token:
+auth_result = get_token(show_login_ui=False)
+
+# ★★★ ログイン前の画面（スマホ対応・安定版） ★★★
+if not auth_result:
+    st.markdown(
+        """
+        <style>
+        .title-custom {
+            font-size: 22px !important;
+            font-weight: 600 !important;
+            color: #555 !important;
+            margin-bottom: 12px !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("<div class='title-custom'>資産管理</div>", unsafe_allow_html=True)
+
+    login_url = get_token(show_login_ui=True)
+
+    # スマホでも確実に動く「普通のリンク」
+    st.markdown(f"[Microsoft にログイン]({login_url})", unsafe_allow_html=True)
+
     st.stop()
+
+# ★★★ ログイン後の画面 ★★★
+token = auth_result
 
 sheets = read_workbook_from_onedrive(token, FILE_PATH)
 if sheets is None:
