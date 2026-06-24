@@ -256,7 +256,7 @@ def input_page(sheet2, sheets, token):
 
         if write_workbook_to_onedrive(token, FILE_PATH, sheets):
             st.success("OneDrive の Excel に保存しました。")
-            st.experimental_rerun()
+            st.rerun()
 
 def list_page(sheet2):
     st.markdown("<div class='subtitle'>履歴一覧</div>", unsafe_allow_html=True)
