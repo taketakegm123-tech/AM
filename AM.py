@@ -362,3 +362,4 @@ elif menu == "📊 Charts":
     sheet2.columns = ["date", "from", "to", "amount", "memo"]
     sheet2["date"] = pd.to_datetime(sheet2["date"])
     st.line_chart(sheet2.set_index("date")["amount"])
+
