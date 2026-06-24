@@ -159,97 +159,105 @@ def calc_diff(current_total, history):
     return current_total - yesterday_total, current_total - last_month_total
 
 # ============================
-# 5. Dashboard UI
-# ============================
-def dashboard(sheet1, sheet2):
-
-    TYPE_COLOR = {
-        "bank": "#dbeafe",
-        "cash": "#dcfce7",
-        "invest": "#fde2e4"
-    }
-
-    st.markdown(
-        """
-        <style>
-        .subtitle {
-            font-size: 26px !important;
-            font-weight: 700 !important;
-            color: #555 !important;
-            margin: 20px 0 10px 0 !important;
-        }
-        .big-card {
-            padding: 16px;
-            border-radius: 12px;
-            background-color: #e9d5ff !important;
-            border: 1px solid #aaa;
-            color: #555 !important;
-            text-align: center;
-            margin-bottom: 16px;
-        }
-        .big-card h1 {
-            font-size: 22px !important;
-            margin: 0 !important;
-        }
-        .big-card h2 {
-            font-size: 14px !important;
-            margin: 0 !important;
-        }
-        .cat-box {
-            padding: 10px;
-            border-radius: 8px;
-            margin-bottom: 10px;
-            border: 1px solid #aaa;
-            color: #555 !important;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    current_total, history = calc_total_and_history(sheet1, sheet2)
-    diff_day, diff_month = calc_diff(current_total, history)
-
-    st.markdown(
-        f"""
-        <div class="big-card">
-            <h1>総資産：¥{current_total:,.0f}</h1>
-            <h2>前日比：{('+' if diff_day >= 0 else '')}¥{diff_day:,.0f} ｜ 前月比：{('+' if diff_month >= 0 else '')}¥{diff_month:,.0f}</h2>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    st.markdown("<div class='subtitle'>カテゴリ別資産</div>", unsafe_allow_html=True)
-
-    col1, col2, col3 = st.columns(3)
-    for col, t in zip([col1, col2, col3], ["bank", "cash", "invest"]):
-        df_cat = sheet1[sheet1["type"] == t]
-        for _, row in df_cat.iterrows():
-            col.markdown(
-                f"""
-                <div class="cat-box" style="background-color:{TYPE_COLOR[t]};">
-                    {row['name']}<br>
-                    ¥{row['balance']:,.0f}
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-    st.markdown("<div class='subtitle'>資産推移（概算）</div>", unsafe_allow_html=True)
-    st.line_chart(history.set_index("date")["total"])
-
-# ============================
-# 6. メイン UI（固定ヘッダー＋ログイン前後）
+# 5. ページ管理（JS → hidden input → session_state）
 # ============================
 
-# ★ ページ初期化（固定ヘッダーより前に必ず置く）
+# 初期ページ設定
 if "page" not in st.session_state:
     st.session_state.page = "Dashboard"
 
+# hidden input（JS がここに値を書き込む）
+page_holder = st.text_input("page_holder", value=st.session_state.page, key="page_holder", label_visibility="hidden")
+
+# hidden input の値が変わったら session_state.page を更新
+if page_holder != st.session_state.page:
+    st.session_state.page = page_holder
+
+
+# ============================
+# 6. 固定ヘッダー（HTML + JavaScript）
+# ============================
+
+st.markdown(
+    """
+    <style>
+    .fixed-header {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        background-color: #f5f5f5;
+        padding: 12px 0;
+        z-index: 9999;
+        border-bottom: 1px solid #ddd;
+        text-align: center;
+    }
+    .menu-btn {
+        margin: 0 6px;
+        padding: 6px 12px;
+        font-size: 15px;
+        border-radius: 6px;
+        border: 1px solid #aaa;
+        background-color: white;
+        color: #555;
+        cursor: pointer;
+    }
+    .menu-btn-active {
+        background-color: #e9d5ff;
+        border-color: #b48cff;
+        font-weight: 700;
+    }
+    .content {
+        margin-top: 90px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# JavaScript：hidden input に値を書き込む
+st.markdown(
+    """
+    <script>
+    function setPage(value) {
+        const input = window.parent.document.querySelector('input[id="page_holder"]');
+        if (input) {
+            input.value = value;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+    }
+    </script>
+    """,
+    unsafe_allow_html=True,
+)
+
+# 固定ヘッダー HTML
+st.markdown(
+    f"""
+    <div class="fixed-header">
+        <button class="menu-btn {'menu-btn-active' if st.session_state.page=='Dashboard' else ''}"
+            onclick="setPage('Dashboard')">🏠 Dashboard</button>
+
+        <button class="menu-btn {'menu-btn-active' if st.session_state.page=='Input' else ''}"
+            onclick="setPage('Input')">➕ Input</button>
+
+        <button class="menu-btn {'menu-btn-active' if st.session_state.page=='List' else ''}"
+            onclick="setPage('List')">📄 List</button>
+
+        <button class="menu-btn {'menu-btn-active' if st.session_state.page=='Charts' else ''}"
+            onclick="setPage('Charts')">📊 Charts</button>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+# ============================
+# 7. ログイン処理（固定ヘッダーの後に配置）
+# ============================
+
 auth_result = get_token(show_login_ui=False)
 
-# ★★★ ログイン前画面 ★★★
+# ログイン前画面
 if not auth_result:
 
     st.markdown(
@@ -290,109 +298,14 @@ if not auth_result:
 
     st.stop()
 
-# ★★★ ログイン後 ★★★
+# ログイン後
 token = auth_result
 
-# 固定ヘッダー
-st.markdown(
-    """
-    <style>
-    .fixed-header {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        background-color: #f5f5f5;
-        padding: 16px 0 10px 0;
-        z-index: 9999;
-        text-align: center;
-        border-bottom: 1px solid #ddd;
-    }
-    .header-title {
-        font-size: 26px !important;
-        font-weight: 700 !important;
-        color: #555 !important;
-        margin-bottom: 8px !important;
-    }
-    .menu-buttons button {
-        margin: 0 4px;
-        padding: 6px 12px;
-        font-size: 16px;
-        border-radius: 6px;
-        border: 1px solid #aaa;
-        background-color: white;
-        color: #555;
-    }
-    .menu-buttons button.active {
-        background-color: #e9d5ff;
-        border-color: #b48cff;
-        font-weight: 700;
-    }
-    .content {
-        margin-top: 40px;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
 
-# 固定ヘッダー HTML → Streamlit ボタンに変更
-st.markdown(
-    """
-    <style>
-    .fixed-header {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        background-color: #f5f5f5;
-        padding: 8px 0;
-        z-index: 9999;
-        border-bottom: 1px solid #ddd;
-        text-align: center;
-    }
-    .tab-btn {
-        display: inline-block;
-        margin: 0 4px;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+# ============================
+# 8. OneDrive 読み込み
+# ============================
 
-st.markdown('<div class="fixed-header">', unsafe_allow_html=True)
-
-col1, col2, col3, col4 = st.columns(4)
-
-with col1:
-    if st.button("🏠 Dashboard", key="tab_dash"):
-        st.session_state.page = "Dashboard"
-
-with col2:
-    if st.button("➕ Input", key="tab_input"):
-        st.session_state.page = "Input"
-
-with col3:
-    if st.button("📄 List", key="tab_list"):
-        st.session_state.page = "List"
-
-with col4:
-    if st.button("📊 Charts", key="tab_charts"):
-        st.session_state.page = "Charts"
-
-st.markdown('</div>', unsafe_allow_html=True)
-
-# 余白
-st.markdown("<div style='margin-top:60px;'></div>", unsafe_allow_html=True)
-
-# ページ切り替え処理
-params = st.query_params
-if "page" in params:
-    st.session_state.page = params["page"]
-
-st.markdown('<div class="content">', unsafe_allow_html=True)
-
-# OneDrive 読み込み
 sheets = read_workbook_from_onedrive(token, FILE_PATH)
 if sheets is None:
     st.stop()
@@ -400,15 +313,98 @@ if sheets is None:
 sheet1 = sheets["Sheet1"]
 sheet2 = sheets["Sheet2"]
 
-# ページ分岐
-if st.session_state.page == "Dashboard":
-    dashboard(sheet1, sheet2)
 
-elif st.session_state.page == "Input":
+# ============================
+# 9. Dashboard ページ
+# ============================
+
+def dashboard_page():
+    current_total, history = calc_total_and_history(sheet1, sheet2)
+    diff_day, diff_month = calc_diff(current_total, history)
+
+    st.markdown(
+        """
+        <style>
+        .subtitle {
+            font-size: 26px !important;
+            font-weight: 700 !important;
+            color: #555 !important;
+            margin: 20px 0 10px 0 !important;
+        }
+        .big-card {
+            padding: 16px;
+            border-radius: 12px;
+            background-color: #e9d5ff !important;
+            border: 1px solid #aaa;
+            color: #555 !important;
+            text-align: center;
+            margin-bottom: 16px;
+        }
+        .big-card h1 {
+            font-size: 22px !important;
+            margin: 0 !important;
+        }
+        .big-card h2 {
+            font-size: 14px !important;
+            margin: 0 !important;
+        }
+        .cat-box {
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #aaa;
+            color: #555 !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        f"""
+        <div class="big-card">
+            <h1>総資産：¥{current_total:,.0f}</h1>
+            <h2>前日比：{('+' if diff_day >= 0 else '')}¥{diff_day:,.0f} ｜ 前月比：{('+' if diff_month >= 0 else '')}¥{diff_month:,.0f}</h2>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("<div class='subtitle'>カテゴリ別資産</div>", unsafe_allow_html=True)
+
+    TYPE_COLOR = {
+        "bank": "#dbeafe",
+        "cash": "#dcfce7",
+        "invest": "#fde2e4"
+    }
+
+    col1, col2, col3 = st.columns(3)
+    for col, t in zip([col1, col2, col3], ["bank", "cash", "invest"]):
+        df_cat = sheet1[sheet1["type"] == t]
+        for _, row in df_cat.iterrows():
+            col.markdown(
+                f"""
+                <div class="cat-box" style="background-color:{TYPE_COLOR[t]};">
+                    {row['name']}<br>
+                    ¥{row['balance']:,.0f}
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    st.markdown("<div class='subtitle'>資産推移（概算）</div>", unsafe_allow_html=True)
+    st.line_chart(history.set_index("date")["total"])
+
+
+# ============================
+# 10. Input ページ
+# ============================
+
+def input_page():
     st.markdown("<div class='subtitle'>新しい仕訳を追加</div>", unsafe_allow_html=True)
 
-    sheet2 = sheet2.copy()
-    sheet2.columns = ["date", "from", "to", "amount", "memo"]
+    sheet2_local = sheet2.copy()
+    sheet2_local.columns = ["date", "from", "to", "amount", "memo"]
 
     col1, col2 = st.columns(2)
     with col1:
@@ -428,23 +424,49 @@ elif st.session_state.page == "Input":
             "amount": amount,
             "memo": memo,
         }
-        df_updated = pd.concat([sheet2, pd.DataFrame([new_row])], ignore_index=True)
+        df_updated = pd.concat([sheet2_local, pd.DataFrame([new_row])], ignore_index=True)
         sheets["Sheet2"] = df_updated
+
         if write_workbook_to_onedrive(token, FILE_PATH, sheets):
             st.success("OneDrive の Excel に保存しました。")
             st.experimental_rerun()
 
-elif st.session_state.page == "List":
+
+# ============================
+# 11. List ページ
+# ============================
+
+def list_page():
     st.markdown("<div class='subtitle'>履歴一覧</div>", unsafe_allow_html=True)
-    sheet2 = sheet2.copy()
-    sheet2.columns = ["date", "from", "to", "amount", "memo"]
-    st.dataframe(sheet2)
+    sheet2_local = sheet2.copy()
+    sheet2_local.columns = ["date", "from", "to", "amount", "memo"]
+    st.dataframe(sheet2_local)
+
+
+# ============================
+# 12. Charts ページ
+# ============================
+
+def charts_page():
+    st.markdown("<div class='subtitle'>金額の推移</div>", unsafe_allow_html=True)
+    sheet2_local = sheet2.copy()
+    sheet2_local.columns = ["date", "from", "to", "amount", "memo"]
+    sheet2_local["date"] = pd.to_datetime(sheet2_local["date"])
+    st.line_chart(sheet2_local.set_index("date")["amount"])
+
+
+# ============================
+# 13. ページ切り替え
+# ============================
+
+if st.session_state.page == "Dashboard":
+    dashboard_page()
+
+elif st.session_state.page == "Input":
+    input_page()
+
+elif st.session_state.page == "List":
+    list_page()
 
 elif st.session_state.page == "Charts":
-    st.markdown("<div class='subtitle'>金額の推移</div>", unsafe_allow_html=True)
-    sheet2 = sheet2.copy()
-    sheet2.columns = ["date", "from", "to", "amount", "memo"]
-    sheet2["date"] = pd.to_datetime(sheet2["date"])
-    st.line_chart(sheet2.set_index("date")["amount"])
-
-st.markdown("</div>", unsafe_allow_html=True)
+    charts_page()
