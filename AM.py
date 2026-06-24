@@ -175,83 +175,6 @@ if page_holder != st.session_state.page:
 
 
 # ============================
-# 6. 固定ヘッダー（HTML + JavaScript）
-# ============================
-
-st.markdown(
-    """
-    <style>
-    .fixed-header {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        background-color: #f5f5f5;
-        padding: 12px 0;
-        z-index: 9999;
-        border-bottom: 1px solid #ddd;
-        text-align: center;
-    }
-    .menu-btn {
-        margin: 0 6px;
-        padding: 6px 12px;
-        font-size: 15px;
-        border-radius: 6px;
-        border: 1px solid #aaa;
-        background-color: white;
-        color: #555;
-        cursor: pointer;
-    }
-    .menu-btn-active {
-        background-color: #e9d5ff;
-        border-color: #b48cff;
-        font-weight: 700;
-    }
-    .content {
-        margin-top: 90px;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-# JavaScript：hidden input に値を書き込む
-st.markdown(
-    """
-    <script>
-    function setPage(value) {
-        const input = window.parent.document.querySelector('input[id="page_holder"]');
-        if (input) {
-            input.value = value;
-            input.dispatchEvent(new Event('input', { bubbles: true }));
-        }
-    }
-    </script>
-    """,
-    unsafe_allow_html=True,
-)
-
-# 固定ヘッダー HTML
-st.markdown(
-    f"""
-    <div class="fixed-header">
-        <button class="menu-btn {'menu-btn-active' if st.session_state.page=='Dashboard' else ''}"
-            onclick="setPage('Dashboard')">🏠 Dashboard</button>
-
-        <button class="menu-btn {'menu-btn-active' if st.session_state.page=='Input' else ''}"
-            onclick="setPage('Input')">➕ Input</button>
-
-        <button class="menu-btn {'menu-btn-active' if st.session_state.page=='List' else ''}"
-            onclick="setPage('List')">📄 List</button>
-
-        <button class="menu-btn {'menu-btn-active' if st.session_state.page=='Charts' else ''}"
-            onclick="setPage('Charts')">📊 Charts</button>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
-# ============================
 # 7. ログイン処理（固定ヘッダーの後に配置）
 # ============================
 
@@ -301,6 +224,80 @@ if not auth_result:
 # ログイン後
 token = auth_result
 
+# ============================
+# 6. 固定ヘッダー（HTML + JavaScript）
+# ============================
+
+st.markdown(
+    """
+    <style>
+    .fixed-header {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        background-color: #f5f5f5;
+        padding: 12px 0;
+        z-index: 9999;
+        border-bottom: 1px solid #ddd;
+        text-align: center;
+    }
+    .menu-btn {
+        margin: 0 6px;
+        padding: 6px 12px;
+        font-size: 15px;
+        border-radius: 6px;
+        border: 1px solid #aaa;
+        background-color: white;
+        color: #555;
+        cursor: pointer;
+    }
+    .menu-btn-active {
+        background-color: #e9d5ff;
+        border-color: #b48cff;
+        font-weight: 700;
+    }
+    .content {
+        margin-top: 90px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    """
+    <script>
+    function setPage(value) {
+        const input = window.parent.document.querySelector('input[id="page_holder"]');
+        if (input) {
+            input.value = value;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+    }
+    </script>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    f"""
+    <div class="fixed-header">
+        <button class="menu-btn {'menu-btn-active' if st.session_state.page=='Dashboard' else ''}"
+            onclick="setPage('Dashboard')">🏠 Dashboard</button>
+
+        <button class="menu-btn {'menu-btn-active' if st.session_state.page=='Input' else ''}"
+            onclick="setPage('Input')">➕ Input</button>
+
+        <button class="menu-btn {'menu-btn-active' if st.session_state.page=='List' else ''}"
+            onclick="setPage('List')">📄 List</button>
+
+        <button class="menu-btn {'menu-btn-active' if st.session_state.page=='Charts' else ''}"
+            onclick="setPage('Charts')">📊 Charts</button>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 # ============================
 # 8. OneDrive 読み込み
