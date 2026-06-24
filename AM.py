@@ -336,23 +336,54 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# 固定ヘッダー HTML
+# 固定ヘッダー HTML → Streamlit ボタンに変更
 st.markdown(
-    f"""
-    <div class="fixed-header">
-        <div class="header-title">資産管理メニュー</div>
-        <div class="menu-buttons">
-            <form>
-                <button name="page" value="Dashboard" class="{ 'active' if st.session_state.page=='Dashboard' else '' }">🏠 Dashboard</button>
-                <button name="page" value="Input" class="{ 'active' if st.session_state.page=='Input' else '' }">➕ Input</button>
-                <button name="page" value="List" class="{ 'active' if st.session_state.page=='List' else '' }">📄 List</button>
-                <button name="page" value="Charts" class="{ 'active' if st.session_state.page=='Charts' else '' }">📊 Charts</button>
-            </form>
-        </div>
-    </div>
+    """
+    <style>
+    .fixed-header {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        background-color: #f5f5f5;
+        padding: 8px 0;
+        z-index: 9999;
+        border-bottom: 1px solid #ddd;
+        text-align: center;
+    }
+    .tab-btn {
+        display: inline-block;
+        margin: 0 4px;
+    }
+    </style>
     """,
     unsafe_allow_html=True,
 )
+
+st.markdown('<div class="fixed-header">', unsafe_allow_html=True)
+
+col1, col2, col3, col4 = st.columns(4)
+
+with col1:
+    if st.button("🏠 Dashboard", key="tab_dash"):
+        st.session_state.page = "Dashboard"
+
+with col2:
+    if st.button("➕ Input", key="tab_input"):
+        st.session_state.page = "Input"
+
+with col3:
+    if st.button("📄 List", key="tab_list"):
+        st.session_state.page = "List"
+
+with col4:
+    if st.button("📊 Charts", key="tab_charts"):
+        st.session_state.page = "Charts"
+
+st.markdown('</div>', unsafe_allow_html=True)
+
+# 余白
+st.markdown("<div style='margin-top:60px;'></div>", unsafe_allow_html=True)
 
 # ページ切り替え処理
 params = st.query_params
