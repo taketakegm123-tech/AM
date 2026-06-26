@@ -95,153 +95,110 @@ def write_workbook_to_onedrive(access_token, file_path, sheets_dict):
     output.seek(0)
 
     response = requests.put(url, headers=headers, data=output.read())
-
     return response.status_code in [200, 201]
 
 # ============================
-# 4. Dashboard 計算ロジック
+# 4. Sheet2 の列を統一
 # ============================
-def calc_total_and_history(sheet1, sheet2):
-    sheet1 = sheet1.copy()
-    sheet2 = sheet2.copy()
-    sheet1.columns = ["type", "name", "balance"]
-    sheet2.columns = ["date", "from", "to", "amount", "memo"]
-    sheet2["date"] = pd.to_datetime(sheet2["date"])
+def clean_sheet2(df):
+    expected = ["date", "type", "amount", "from", "to", "memo"]
 
-    current_total = sheet1["balance"].sum()
+    # 列が足りない場合は追加
+    while len(df.columns) < len(expected):
+        df[expected[len(df.columns)]] = ""
 
-    asset_names = sheet1["name"].tolist()
+    # 多い場合は切り捨て
+    if len(df.columns) > len(expected):
+        df = df.iloc[:, :len(expected)]
 
-    def row_delta(row):
-        f = row["from"]
-        t = row["to"]
-        amt = row["amount"]
+    df.columns = expected
+    return df
 
-        f_is_asset = f in asset_names
-        t_is_asset = t in asset_names
+# ============================
+# 5. Dashboard 計算ロジック
+# ============================
+def calc_income_expense(sheet2):
+    df = sheet2.copy()
+    df["date"] = pd.to_datetime(df["date"])
 
-        if f_is_asset and t_is_asset:
-            return 0
-        if f_is_asset and not t_is_asset:
-            return -amt
-        if not f_is_asset and t_is_asset:
-            return +amt
-        return 0
-
-    sheet2["delta"] = sheet2.apply(row_delta, axis=1)
-    daily_delta = sheet2.groupby("date")["delta"].sum().sort_index()
-
-    if len(daily_delta) == 0:
-        history = pd.DataFrame({
-            "date": [datetime.today().date()],
-            "total": [current_total]
-        })
-    else:
-        daily_delta_sorted = daily_delta.sort_index(ascending=False)
-        totals = []
-        running_total = current_total
-        for d, delta in daily_delta_sorted.items():
-            totals.append((d.date(), running_total))
-            running_total -= delta
-        history = pd.DataFrame(totals, columns=["date", "total"]).sort_values("date")
-
-    return current_total, history
-
-def calc_diff(current_total, history):
-    today = history["date"].max()
+    today = datetime.today().date()
     yesterday = today - timedelta(days=1)
-    last_month = today - timedelta(days=30)
+    month_start = today.replace(day=1)
 
-    y_row = history[history["date"] <= yesterday]
-    yesterday_total = y_row["total"].iloc[-1] if len(y_row) else current_total
+    # 昨日の収支
+    df_y = df[df["date"].dt.date == yesterday]
+    yesterday_total = df_y["amount"].sum()
 
-    m_row = history[history["date"] <= last_month]
-    last_month_total = m_row["total"].iloc[-1] if len(m_row) else current_total
+    # 今月の収支
+    df_m = df[df["date"].dt.date >= month_start]
+    month_total = df_m["amount"].sum()
 
-    return current_total - yesterday_total, current_total - last_month_total
+    return yesterday_total, month_total
+
+def calc_total(sheet1):
+    sheet1 = sheet1.copy()
+    sheet1.columns = ["type", "name", "balance"]
+    return sheet1["balance"].sum()
 
 # ============================
-# 5. Dashboard ページ
+# 6. Dashboard ページ
 # ============================
 def dashboard_page(sheet1, sheet2):
-    current_total, history = calc_total_and_history(sheet1, sheet2)
-    diff_day, diff_month = calc_diff(current_total, history)
+    total = calc_total(sheet1)
+    y_total, m_total = calc_income_expense(sheet2)
 
     st.markdown(
         """
         <style>
-        .big-card {
-            padding: 10px;
+        .card {
+            padding: 12px;
             border-radius: 10px;
-            background-color: #e9d5ff !important;
+            background-color: #e9d5ff;
             border: 1px solid #aaa;
-            color: #555 !important;
+            color: #555;
             text-align: center;
             margin-bottom: 12px;
         }
-        .big-card h1 {
-            font-size: 18px !important;
-            margin: 0 !important;
-        }
-        .big-card h2 {
-            font-size: 12px !important;
-            margin: 0 !important;
-        }
-        .subtitle {
-            font-size: 22px !important;
-            font-weight: 700 !important;
-            color: #555 !important;
-            margin: 20px 0 10px 0 !important;
-        }
+        .card h1 { font-size: 20px; margin: 0; }
+        .card h2 { font-size: 14px; margin: 0; }
         </style>
         """,
         unsafe_allow_html=True,
     )
 
-    st.markdown(
-        f"""
-        <div class="big-card">
-            <h1>総資産：¥{current_total:,.0f}</h1>
-            <h2>前日比：{('+' if diff_day >= 0 else '')}¥{diff_day:,.0f} ｜ 前月比：{('+' if diff_month >= 0 else '')}¥{diff_month:,.0f}</h2>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    st.markdown(f"<div class='card'><h1>総資産：¥{total:,.0f}</h1></div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='card'><h2>昨日の収支：¥{y_total:,.0f}</h2></div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='card'><h2>今月の収支：¥{m_total:,.0f}</h2></div>", unsafe_allow_html=True)
 
-    st.markdown("<div class='subtitle'>カテゴリ別資産</div>", unsafe_allow_html=True)
-
-    TYPE_COLOR = {
-        "bank": "#dbeafe",
-        "cash": "#dcfce7",
-        "invest": "#fde2e4"
-    }
-
+    # 資産別カード
+    TYPE_COLOR = {"bank": "#dbeafe", "cash": "#dcfce7", "invest": "#fde2e4"}
     col1, col2, col3 = st.columns(3)
+
     for col, t in zip([col1, col2, col3], ["bank", "cash", "invest"]):
         df_cat = sheet1[sheet1["type"] == t]
         for _, row in df_cat.iterrows():
             col.markdown(
                 f"""
-                <div style="padding:10px; border-radius:8px; border:1px solid #aaa; background-color:{TYPE_COLOR[t]}; margin-bottom:10px;">
-                    {row['name']}<br>
-                    ¥{row['balance']:,.0f}
+                <div style="padding:10px; border-radius:8px; border:1px solid #aaa;
+                background-color:{TYPE_COLOR[t]}; margin-bottom:10px;">
+                    {row['name']}<br>¥{row['balance']:,.0f}
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
 
-    st.markdown("<div class='subtitle'>資産推移（概算）</div>", unsafe_allow_html=True)
-    st.line_chart(history.set_index("date")["total"])
-
 # ============================
-# 6. Input ページ（残高自動更新版）
+# 7. Input ページ（支出 / 収入 / 振替）
 # ============================
 def input_page(sheet1, sheet2, sheets, token):
 
+    # リセット用カウンタ
     if "exp_reset" not in st.session_state:
         st.session_state.exp_reset = 0
     if "inc_reset" not in st.session_state:
         st.session_state.inc_reset = 0
+    if "trf_reset" not in st.session_state:
+        st.session_state.trf_reset = 0
 
     asset_list = sheet1["name"].tolist()
     default_wallet_index = asset_list.index("財布") if "財布" in asset_list else 0
@@ -252,42 +209,40 @@ def input_page(sheet1, sheet2, sheets, token):
     with st.container(border=True):
         st.subheader("支出")
 
-        key_suffix = st.session_state.exp_reset
+        k = st.session_state.exp_reset
 
-        exp_date = st.date_input("日付", key=f"exp_date_{key_suffix}")
-        exp_amount = st.text_input("金額（プラスで入力）", key=f"exp_amount_{key_suffix}")
-        exp_from = st.selectbox("from（出金元）", asset_list, index=default_wallet_index, key=f"exp_from_{key_suffix}")
-        exp_to = st.text_input("to（費目）", key=f"exp_to_{key_suffix}")
-        exp_memo = st.text_input("メモ（任意）", key=f"exp_memo_{key_suffix}")
+        exp_date = st.date_input("日付", key=f"exp_date_{k}")
+        exp_amount = st.text_input("金額", key=f"exp_amount_{k}")
+        exp_from = st.selectbox("from（出金元）", asset_list, index=default_wallet_index, key=f"exp_from_{k}")
+        exp_to = st.text_input("to（費目）", key=f"exp_to_{k}")
+        exp_memo = st.text_input("メモ", key=f"exp_memo_{k}")
 
-        if st.button("支出を入力"):
+        if st.button("支出を登録"):
             if not exp_amount.isdigit():
                 st.error("金額は数字で入力してください")
                 return
 
             amount_val = -abs(int(exp_amount))
 
+            # Sheet2 追加
             new_row = {
                 "date": pd.to_datetime(exp_date),
+                "type": "支出",
+                "amount": amount_val,
                 "from": exp_from,
                 "to": exp_to,
-                "amount": amount_val,
                 "memo": exp_memo
             }
 
             df = sheet2.copy()
-            df.columns = ["date", "from", "to", "amount", "memo"]
             df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
             sheets["Sheet2"] = df
 
-            # --- Sheet1 の残高更新 ---
-            sheet1 = sheets["Sheet1"].copy()
-            sheet1.columns = ["type", "name", "balance"]
-
-            if exp_from in sheet1["name"].values:
-                sheet1.loc[sheet1["name"] == exp_from, "balance"] -= abs(int(exp_amount))
-
-            sheets["Sheet1"] = sheet1
+            # Sheet1 更新（from 減る）
+            s1 = sheet1.copy()
+            s1.columns = ["type", "name", "balance"]
+            s1.loc[s1["name"] == exp_from, "balance"] -= abs(int(exp_amount))
+            sheets["Sheet1"] = s1
 
             write_workbook_to_onedrive(token, FILE_PATH, sheets)
             st.session_state.sheets = read_workbook_from_onedrive(token, FILE_PATH)
@@ -301,15 +256,15 @@ def input_page(sheet1, sheet2, sheets, token):
     with st.container(border=True):
         st.subheader("収入")
 
-        key_suffix = st.session_state.inc_reset
+        k = st.session_state.inc_reset
 
-        inc_date = st.date_input("日付", key=f"inc_date_{key_suffix}")
-        inc_amount = st.text_input("金額（プラスで入力）", key=f"inc_amount_{key_suffix}")
-        inc_from = st.text_input("from（収入元）", key=f"inc_from_{key_suffix}")
-        inc_to = st.selectbox("to（入金先資産）", asset_list, index=default_wallet_index, key=f"inc_to_{key_suffix}")
-        inc_memo = st.text_input("メモ（任意）", key=f"inc_memo_{key_suffix}")
+        inc_date = st.date_input("日付", key=f"inc_date_{k}")
+        inc_amount = st.text_input("金額", key=f"inc_amount_{k}")
+        inc_from = st.text_input("from（収入元）", key=f"inc_from_{k}")
+        inc_to = st.selectbox("to（入金先資産）", asset_list, index=default_wallet_index, key=f"inc_to_{k}")
+        inc_memo = st.text_input("メモ", key=f"inc_memo_{k}")
 
-        if st.button("収入を入力"):
+        if st.button("収入を登録"):
             if not inc_amount.isdigit():
                 st.error("金額は数字で入力してください")
                 return
@@ -318,25 +273,22 @@ def input_page(sheet1, sheet2, sheets, token):
 
             new_row = {
                 "date": pd.to_datetime(inc_date),
+                "type": "収入",
+                "amount": amount_val,
                 "from": inc_from,
                 "to": inc_to,
-                "amount": amount_val,
                 "memo": inc_memo
             }
 
             df = sheet2.copy()
-            df.columns = ["date", "from", "to", "amount", "memo"]
             df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
             sheets["Sheet2"] = df
 
-            # --- Sheet1 の残高更新 ---
-            sheet1 = sheets["Sheet1"].copy()
-            sheet1.columns = ["type", "name", "balance"]
-
-            if inc_to in sheet1["name"].values:
-                sheet1.loc[sheet1["name"] == inc_to, "balance"] += abs(int(inc_amount))
-
-            sheets["Sheet1"] = sheet1
+            # Sheet1 更新（to 増える）
+            s1 = sheet1.copy()
+            s1.columns = ["type", "name", "balance"]
+            s1.loc[s1["name"] == inc_to, "balance"] += abs(int(inc_amount))
+            sheets["Sheet1"] = s1
 
             write_workbook_to_onedrive(token, FILE_PATH, sheets)
             st.session_state.sheets = read_workbook_from_onedrive(token, FILE_PATH)
@@ -344,40 +296,82 @@ def input_page(sheet1, sheet2, sheets, token):
             st.session_state.inc_reset += 1
             st.rerun()
 
+    # ============================
+    # 振替（Transfer）
+    # ============================
+    with st.container(border=True):
+        st.subheader("振替（資産移動）")
+
+        k = st.session_state.trf_reset
+
+        trf_date = st.date_input("日付", key=f"trf_date_{k}")
+        trf_amount = st.text_input("金額", key=f"trf_amount_{k}")
+        trf_from = st.selectbox("from（出金元）", asset_list, key=f"trf_from_{k}")
+        trf_to = st.selectbox("to（入金先）", asset_list, key=f"trf_to_{k}")
+        trf_memo = st.text_input("メモ", key=f"trf_memo_{k}")
+
+        if st.button("振替を登録"):
+            if not trf_amount.isdigit():
+                st.error("金額は数字で入力してください")
+                return
+
+            amount_val = abs(int(trf_amount))
+
+            new_row = {
+                "date": pd.to_datetime(trf_date),
+                "type": "振替",
+                "amount": amount_val,
+                "from": trf_from,
+                "to": trf_to,
+                "memo": trf_memo
+            }
+
+            df = sheet2.copy()
+            df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+            sheets["Sheet2"] = df
+
+            # Sheet1 更新（from 減る / to 増える）
+            s1 = sheet1.copy()
+            s1.columns = ["type", "name", "balance"]
+            s1.loc[s1["name"] == trf_from, "balance"] -= amount_val
+            s1.loc[s1["name"] == trf_to, "balance"] += amount_val
+            sheets["Sheet1"] = s1
+
+            write_workbook_to_onedrive(token, FILE_PATH, sheets)
+            st.session_state.sheets = read_workbook_from_onedrive(token, FILE_PATH)
+
+            st.session_state.trf_reset += 1
+            st.rerun()
+
 # ============================
-# 7. List ページ
+# 8. List ページ
 # ============================
 def list_page(sheet2):
     st.subheader("履歴一覧")
 
     df = sheet2.copy()
-    df.columns = ["date", "from", "to", "amount", "memo"]
-
     df["date"] = pd.to_datetime(df["date"])
-    df["type"] = df["amount"].apply(lambda x: "支出" if x < 0 else "収入")
 
     weekday_map = {
         "Monday": "月", "Tuesday": "火", "Wednesday": "水",
         "Thursday": "木", "Friday": "金", "Saturday": "土", "Sunday": "日"
     }
     df["weekday"] = df["date"].dt.day_name().map(weekday_map)
-
     df["date_display"] = df["date"].dt.strftime("%Y-%m-%d") + "（" + df["weekday"] + "）"
 
     df = df.sort_values("date", ascending=False)
 
-    display_df = df[["date_display", "type", "from", "to", "amount", "memo"]].copy()
+    display_df = df[["date_display", "type", "amount", "from", "to", "memo"]]
 
     st.dataframe(display_df, use_container_width=True)
 
 # ============================
-# 10. ログイン処理
+# 9. ログイン処理
 # ============================
 auth_result = get_token(show_login_ui=False)
 
 if not auth_result:
     st.title("資産管理")
-
     login_url = get_token(show_login_ui=True)
 
     st.markdown(
@@ -398,48 +392,32 @@ if not auth_result:
         """,
         unsafe_allow_html=True,
     )
-
     st.stop()
 
 token = auth_result
 st.session_state.token = token
 
 # ============================
-# 11. OneDrive 読み込み
+# 10. OneDrive 読み込み
 # ============================
 if "sheets" not in st.session_state:
     st.session_state.sheets = read_workbook_from_onedrive(token, FILE_PATH)
 
 sheets = st.session_state.sheets
 sheet1 = sheets["Sheet1"]
-sheet2 = sheets["Sheet2"]
-
-expected_cols = ["date", "from", "to", "amount", "memo"]
-
-while len(sheet2.columns) < len(expected_cols):
-    sheet2[expected_cols[len(sheet2.columns)]] = ""
-
-if len(sheet2.columns) > len(expected_cols):
-    sheet2 = sheet2.iloc[:, :len(expected_cols)]
-
-sheet2.columns = expected_cols
+sheet2 = clean_sheet2(sheets["Sheet2"])
 
 # ============================
-# 12. メニュー
+# 11. メニュー
 # ============================
 if "page" not in st.session_state:
     st.session_state.page = "Dashboard"
 
-menu = st.radio(
-    "メニュー",
-    ["Dashboard", "Input", "List"],
-    horizontal=True,
-)
-
+menu = st.radio("メニュー", ["Dashboard", "Input", "List"], horizontal=True)
 st.session_state.page = menu
 
 # ============================
-# 13. ページ切り替え
+# 12. ページ切り替え
 # ============================
 if st.session_state.page == "Dashboard":
     dashboard_page(sheet1, sheet2)
@@ -449,3 +427,4 @@ elif st.session_state.page == "Input":
 
 elif st.session_state.page == "List":
     list_page(sheet2)
+
