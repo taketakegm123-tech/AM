@@ -4,7 +4,6 @@ import requests
 import pandas as pd
 import io
 from datetime import datetime, timedelta
-import matplotlib.pyplot as plt
 
 # ============================
 # 1. Secrets 読み込み
@@ -360,8 +359,10 @@ def list_page(sheet2):
     st.dataframe(display_df, use_container_width=True)
 
 # ============================
-# 9. グラフページ
+# 9. グラフページ（plotly版）
 # ============================
+import plotly.express as px
+
 def graph_page(sheet1, sheet2):
 
     df = sheet2.copy()
@@ -408,37 +409,54 @@ def graph_page(sheet1, sheet2):
     # ============================
     # ③ 支出割合（円グラフ）
     # ④ 収入割合（円グラフ）
-    # → 横並び 1段2列
+    # → 横並び 1段2列（plotly版）
     # ============================
     st.subheader("今月の支出・収入の割合")
 
     col1, col2 = st.columns(2)
 
-    # 支出割合
+    # ----------------------------
+    # 支出割合（費目別 to）
+    # ----------------------------
     with col1:
         st.write("今月の支出割合（費目別）")
+
         df_exp = df[(df["type"] == "支出") & (df["date"].dt.date >= month_start)]
+
         if len(df_exp) > 0:
             exp_group = df_exp.groupby("to")["amount"].sum().abs()
-            fig, ax = plt.subplots(figsize=(4, 4))
-            exp_group.plot(kind="pie", autopct="%1.1f%%", ax=ax)
-            ax.set_ylabel("")
-            st.pyplot(fig)
+            fig = px.pie(
+                names=exp_group.index,
+                values=exp_group.values,
+                title="支出割合",
+                width=300,
+                height=300
+            )
+            st.plotly_chart(fig, use_container_width=False)
         else:
             st.write("データなし")
 
-    # 収入割合
+    # ----------------------------
+    # 収入割合（収入元別 from）
+    # ----------------------------
     with col2:
         st.write("今月の収入割合（収入元別）")
+
         df_inc = df[(df["type"] == "収入") & (df["date"].dt.date >= month_start)]
+
         if len(df_inc) > 0:
             inc_group = df_inc.groupby("from")["amount"].sum()
-            fig, ax = plt.subplots(figsize=(4, 4))
-            inc_group.plot(kind="pie", autopct="%1.1f%%", ax=ax)
-            ax.set_ylabel("")
-            st.pyplot(fig)
+            fig = px.pie(
+                names=inc_group.index,
+                values=inc_group.values,
+                title="収入割合",
+                width=300,
+                height=300
+            )
+            st.plotly_chart(fig, use_container_width=False)
         else:
             st.write("データなし")
+
 
 # ============================
 # 10. ログイン処理
