@@ -359,7 +359,7 @@ def list_page(sheet2):
     st.dataframe(display_df, use_container_width=True)
 
 # ============================
-# 9. グラフページ（plotly版・完全修正版）
+# 9. グラフページ（完全修正版）
 # ============================
 import plotly.express as px
 import plotly.graph_objects as go
@@ -375,14 +375,76 @@ def graph_page(sheet1, sheet2):
     st.header("📊 グラフ")
 
     # ============================
-    # ① 総資産額の推移（縦棒・日単位・マイナスなし）
+    # ① 支出・収入の円グラフ（2段構成）
     # ============================
-    st.subheader("総資産額の推移（縦棒グラフ）")
+    st.subheader("今月の支出・収入")
 
+    # ---- 支出 ----
+    df_exp = df[(df["type"] == "支出") & (df["date"].dt.date >= month_start)]
+    if len(df_exp) > 0:
+        exp_group = df_exp.groupby("to")["amount"].sum().abs()
+        total_exp = exp_group.sum()
+
+        fig_exp = px.pie(
+            names=exp_group.index,
+            values=exp_group.values,
+            title=f"支出　合計：¥{total_exp:,.0f}",
+            width=350,
+            height=350
+        )
+        st.plotly_chart(fig_exp, use_container_width=False)
+    else:
+        st.write("今月の支出データなし")
+
+    # ---- 収入 ----
+    df_inc = df[(df["type"] == "収入") & (df["date"].dt.date >= month_start)]
+    if len(df_inc) > 0:
+        inc_group = df_inc.groupby("from")["amount"].sum()
+        total_inc = inc_group.sum()
+
+        fig_inc = px.pie(
+            names=inc_group.index,
+            values=inc_group.values,
+            title=f"収入　合計：¥{total_inc:,.0f}",
+            width=350,
+            height=350
+        )
+        st.plotly_chart(fig_inc, use_container_width=False)
+    else:
+        st.write("今月の収入データなし")
+
+    # ============================
+    # ② 日別の収支（色分け棒グラフ）
+    # ============================
+    st.subheader("日別の収支")
+
+    df_income = df[df["type"] != "振替"].copy()
+    df_income["date_only"] = df_income["date"].dt.date
+    daily = df_income.groupby("date_only")["amount"].sum().reset_index()
+
+    # 色分け（プラス：薄緑、マイナス：ピンク）
+    colors = ["#b7f7c1" if v >= 0 else "#ffb3c6" for v in daily["amount"]]
+
+    fig_daily = go.Figure(
+        data=[go.Bar(
+            x=daily["date_only"],
+            y=daily["amount"],
+            marker_color=colors
+        )]
+    )
+    st.plotly_chart(fig_daily, use_container_width=True)
+
+    # ============================
+    # ③ 資産総額の推移（月ごと・薄青）
+    # ============================
+    st.subheader("資産総額の推移（月ごと）")
+
+    # 現在の総資産
     s1 = sheet1.copy()
     s1.columns = ["type", "name", "balance"]
     current_total = s1["balance"].sum()
 
+    # 振替を除外して逆順に積み上げ
     df2 = df[df["type"] != "振替"].copy()
     df2 = df2.sort_values("date", ascending=False)
 
@@ -395,77 +457,20 @@ def graph_page(sheet1, sheet2):
 
     hist = pd.DataFrame(totals, columns=["date", "total"]).sort_values("date")
 
-    # plotly で y 軸を 0 以上に固定
-    fig_total = px.bar(hist, x="date", y="total")
-    fig_total.update_layout(yaxis=dict(range=[0, hist["total"].max() * 1.1]))
+    # 月単位に集計
+    hist["month"] = hist["date"].apply(lambda d: d.replace(day=1))
+    monthly = hist.groupby("month")["total"].last().reset_index()
+
+    fig_total = px.bar(
+        monthly,
+        x="month",
+        y="total",
+        title="資産総額（月ごと）",
+        color_discrete_sequence=["#a7c7ff"]  # 薄い青
+    )
+    fig_total.update_layout(yaxis=dict(range=[0, monthly["total"].max() * 1.1]))
+
     st.plotly_chart(fig_total, use_container_width=True)
-
-    # ============================
-    # ② 日別の収支（縦棒）
-    # ============================
-    st.subheader("日別の収支（縦棒グラフ）")
-
-    df_income = df[df["type"] != "振替"].copy()
-    df_income["date_only"] = df_income["date"].dt.date
-    daily = df_income.groupby("date_only")["amount"].sum().reset_index()
-
-    fig_daily = px.bar(daily, x="date_only", y="amount")
-    st.plotly_chart(fig_daily, use_container_width=True)
-
-    # ============================
-    # ③ 支出割合（円グラフ）
-    # ④ 収入割合（円グラフ）
-    # → 横並び 1段2列
-    # ============================
-    st.subheader("今月の支出・収入の割合")
-
-    col1, col2 = st.columns(2)
-
-    # ----------------------------
-    # 支出割合（費目別 to）
-    # ----------------------------
-    with col1:
-        df_exp = df[(df["type"] == "支出") & (df["date"].dt.date >= month_start)]
-
-        st.write("支出（今月）")
-
-        if len(df_exp) > 0:
-            exp_group = df_exp.groupby("to")["amount"].sum().abs()
-            total_exp = exp_group.sum()
-
-            fig_exp = px.pie(
-                names=exp_group.index,
-                values=exp_group.values,
-                title=f"支出　合計：¥{total_exp:,.0f}",
-                width=300,
-                height=300
-            )
-            st.plotly_chart(fig_exp, use_container_width=False)
-        else:
-            st.write("データなし")
-
-    # ----------------------------
-    # 収入割合（収入元別 from）
-    # ----------------------------
-    with col2:
-        df_inc = df[(df["type"] == "収入") & (df["date"].dt.date >= month_start)]
-
-        st.write("収入（今月）")
-
-        if len(df_inc) > 0:
-            inc_group = df_inc.groupby("from")["amount"].sum()
-            total_inc = inc_group.sum()
-
-            fig_inc = px.pie(
-                names=inc_group.index,
-                values=inc_group.values,
-                title=f"収入　合計：¥{total_inc:,.0f}",
-                width=300,
-                height=300
-            )
-            st.plotly_chart(fig_inc, use_container_width=False)
-        else:
-            st.write("データなし")
 
 
 # ============================
