@@ -3,3 +3,4 @@ msal
 requests
 pandas
 openpyxl
+plotly
