@@ -117,9 +117,13 @@ def clean_sheet2(df):
 # ============================
 # 5. Dashboard 計算ロジック
 # ============================
+
 def calc_income_expense(sheet2):
     df = sheet2.copy()
     df["date"] = pd.to_datetime(df["date"])
+
+    # 🔥 振替(type="振替")は収支に含めない
+    df = df[df["type"] != "振替"]
 
     today = datetime.today().date()
     yesterday = today - timedelta(days=1)
@@ -135,10 +139,12 @@ def calc_income_expense(sheet2):
 
     return yesterday_total, month_total
 
+
 def calc_total(sheet1):
     sheet1 = sheet1.copy()
     sheet1.columns = ["type", "name", "balance"]
     return sheet1["balance"].sum()
+
 
 # ============================
 # 6. Dashboard ページ
