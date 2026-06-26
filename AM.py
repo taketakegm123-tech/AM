@@ -422,7 +422,6 @@ def graph_page(sheet1, sheet2):
     df_income["date_only"] = df_income["date"].dt.date
     daily = df_income.groupby("date_only")["amount"].sum().reset_index()
 
-    # 色分け（プラス：薄緑、マイナス：ピンク）
     colors = ["#b7f7c1" if v >= 0 else "#ffb3c6" for v in daily["amount"]]
 
     fig_daily = go.Figure(
@@ -435,9 +434,28 @@ def graph_page(sheet1, sheet2):
     st.plotly_chart(fig_daily, use_container_width=True)
 
     # ============================
-    # ③ 資産総額の推移（月ごと・薄青）
+    # ③ 月別の収支（色分け棒グラフ）
     # ============================
-    st.subheader("資産総額の推移（月ごと）")
+    st.subheader("月別の収支")
+
+    df_income["month"] = df_income["date"].dt.to_period("M").dt.to_timestamp()
+    monthly = df_income.groupby("month")["amount"].sum().reset_index()
+
+    colors_m = ["#b7f7c1" if v >= 0 else "#ffb3c6" for v in monthly["amount"]]
+
+    fig_monthly = go.Figure(
+        data=[go.Bar(
+            x=monthly["month"],
+            y=monthly["amount"],
+            marker_color=colors_m
+        )]
+    )
+    st.plotly_chart(fig_monthly, use_container_width=True)
+
+    # ============================
+    # ④ 資産総額の推移（月ごと）← 残す
+    # ============================
+    st.subheader("資産総額の推移")
 
     # 現在の総資産
     s1 = sheet1.copy()
@@ -459,16 +477,15 @@ def graph_page(sheet1, sheet2):
 
     # 月単位に集計
     hist["month"] = hist["date"].apply(lambda d: d.replace(day=1))
-    monthly = hist.groupby("month")["total"].last().reset_index()
+    monthly_total = hist.groupby("month")["total"].last().reset_index()
 
     fig_total = px.bar(
-        monthly,
+        monthly_total,
         x="month",
         y="total",
-        title="資産総額（月ごと）",
         color_discrete_sequence=["#a7c7ff"]  # 薄い青
     )
-    fig_total.update_layout(yaxis=dict(range=[0, monthly["total"].max() * 1.1]))
+    fig_total.update_layout(yaxis=dict(range=[0, monthly_total["total"].max() * 1.1]))
 
     st.plotly_chart(fig_total, use_container_width=True)
 
