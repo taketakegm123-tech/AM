@@ -4,6 +4,7 @@ import requests
 import pandas as pd
 import io
 from datetime import datetime, timedelta
+import matplotlib.pyplot as plt
 
 # ============================
 # 1. Secrets 読み込み
@@ -103,11 +104,9 @@ def write_workbook_to_onedrive(access_token, file_path, sheets_dict):
 def clean_sheet2(df):
     expected = ["date", "type", "amount", "from", "to", "memo"]
 
-    # 列が足りない場合は追加
     while len(df.columns) < len(expected):
         df[expected[len(df.columns)]] = ""
 
-    # 多い場合は切り捨て
     if len(df.columns) > len(expected):
         df = df.iloc[:, :len(expected)]
 
@@ -117,34 +116,29 @@ def clean_sheet2(df):
 # ============================
 # 5. Dashboard 計算ロジック
 # ============================
-
 def calc_income_expense(sheet2):
     df = sheet2.copy()
     df["date"] = pd.to_datetime(df["date"])
 
-    # 🔥 振替(type="振替")は収支に含めない
+    # 振替は収支に含めない
     df = df[df["type"] != "振替"]
 
     today = datetime.today().date()
     yesterday = today - timedelta(days=1)
     month_start = today.replace(day=1)
 
-    # 昨日の収支
     df_y = df[df["date"].dt.date == yesterday]
     yesterday_total = df_y["amount"].sum()
 
-    # 今月の収支
     df_m = df[df["date"].dt.date >= month_start]
     month_total = df_m["amount"].sum()
 
     return yesterday_total, month_total
 
-
 def calc_total(sheet1):
     sheet1 = sheet1.copy()
     sheet1.columns = ["type", "name", "balance"]
     return sheet1["balance"].sum()
-
 
 # ============================
 # 6. Dashboard ページ
@@ -176,7 +170,6 @@ def dashboard_page(sheet1, sheet2):
     st.markdown(f"<div class='card'><h2>昨日の収支：¥{y_total:,.0f}</h2></div>", unsafe_allow_html=True)
     st.markdown(f"<div class='card'><h2>今月の収支：¥{m_total:,.0f}</h2></div>", unsafe_allow_html=True)
 
-    # 資産別カード
     TYPE_COLOR = {"bank": "#dbeafe", "cash": "#dcfce7", "invest": "#fde2e4"}
     col1, col2, col3 = st.columns(3)
 
@@ -198,7 +191,6 @@ def dashboard_page(sheet1, sheet2):
 # ============================
 def input_page(sheet1, sheet2, sheets, token):
 
-    # リセット用カウンタ
     if "exp_reset" not in st.session_state:
         st.session_state.exp_reset = 0
     if "inc_reset" not in st.session_state:
@@ -230,7 +222,6 @@ def input_page(sheet1, sheet2, sheets, token):
 
             amount_val = -abs(int(exp_amount))
 
-            # Sheet2 追加
             new_row = {
                 "date": pd.to_datetime(exp_date),
                 "type": "支出",
@@ -244,7 +235,6 @@ def input_page(sheet1, sheet2, sheets, token):
             df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
             sheets["Sheet2"] = df
 
-            # Sheet1 更新（from 減る）
             s1 = sheet1.copy()
             s1.columns = ["type", "name", "balance"]
             s1.loc[s1["name"] == exp_from, "balance"] -= abs(int(exp_amount))
@@ -290,7 +280,6 @@ def input_page(sheet1, sheet2, sheets, token):
             df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
             sheets["Sheet2"] = df
 
-            # Sheet1 更新（to 増える）
             s1 = sheet1.copy()
             s1.columns = ["type", "name", "balance"]
             s1.loc[s1["name"] == inc_to, "balance"] += abs(int(inc_amount))
@@ -336,7 +325,6 @@ def input_page(sheet1, sheet2, sheets, token):
             df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
             sheets["Sheet2"] = df
 
-            # Sheet1 更新（from 減る / to 増える）
             s1 = sheet1.copy()
             s1.columns = ["type", "name", "balance"]
             s1.loc[s1["name"] == trf_from, "balance"] -= amount_val
@@ -372,7 +360,88 @@ def list_page(sheet2):
     st.dataframe(display_df, use_container_width=True)
 
 # ============================
-# 9. ログイン処理
+# 9. グラフページ
+# ============================
+def graph_page(sheet1, sheet2):
+
+    df = sheet2.copy()
+    df["date"] = pd.to_datetime(df["date"])
+
+    today = datetime.today().date()
+    month_start = today.replace(day=1)
+
+    st.header("📊 グラフ")
+
+    # ============================
+    # ① 総資産額の推移（縦棒）
+    # ============================
+    st.subheader("総資産額の推移（縦棒グラフ）")
+
+    s1 = sheet1.copy()
+    s1.columns = ["type", "name", "balance"]
+    current_total = s1["balance"].sum()
+
+    df2 = df[df["type"] != "振替"].copy()
+    df2 = df2.sort_values("date", ascending=False)
+
+    totals = []
+    running = current_total
+
+    for _, row in df2.iterrows():
+        totals.append((row["date"].date(), running))
+        running -= row["amount"]
+
+    hist = pd.DataFrame(totals, columns=["date", "total"]).sort_values("date")
+
+    st.bar_chart(hist.set_index("date")["total"])
+
+    # ============================
+    # ② 日別の収支（縦棒）
+    # ============================
+    st.subheader("日別の収支（縦棒グラフ）")
+
+    df_income = df[df["type"] != "振替"].copy()
+    daily = df_income.groupby(df_income["date"].dt.date)["amount"].sum()
+
+    st.bar_chart(daily)
+
+    # ============================
+    # ③ 支出割合（円グラフ）
+    # ④ 収入割合（円グラフ）
+    # → 横並び 1段2列
+    # ============================
+    st.subheader("今月の支出・収入の割合")
+
+    col1, col2 = st.columns(2)
+
+    # 支出割合
+    with col1:
+        st.write("今月の支出割合（費目別）")
+        df_exp = df[(df["type"] == "支出") & (df["date"].dt.date >= month_start)]
+        if len(df_exp) > 0:
+            exp_group = df_exp.groupby("to")["amount"].sum().abs()
+            fig, ax = plt.subplots(figsize=(4, 4))
+            exp_group.plot(kind="pie", autopct="%1.1f%%", ax=ax)
+            ax.set_ylabel("")
+            st.pyplot(fig)
+        else:
+            st.write("データなし")
+
+    # 収入割合
+    with col2:
+        st.write("今月の収入割合（収入元別）")
+        df_inc = df[(df["type"] == "収入") & (df["date"].dt.date >= month_start)]
+        if len(df_inc) > 0:
+            inc_group = df_inc.groupby("from")["amount"].sum()
+            fig, ax = plt.subplots(figsize=(4, 4))
+            inc_group.plot(kind="pie", autopct="%1.1f%%", ax=ax)
+            ax.set_ylabel("")
+            st.pyplot(fig)
+        else:
+            st.write("データなし")
+
+# ============================
+# 10. ログイン処理
 # ============================
 auth_result = get_token(show_login_ui=False)
 
@@ -404,7 +473,7 @@ token = auth_result
 st.session_state.token = token
 
 # ============================
-# 10. OneDrive 読み込み
+# 11. OneDrive 読み込み
 # ============================
 if "sheets" not in st.session_state:
     st.session_state.sheets = read_workbook_from_onedrive(token, FILE_PATH)
@@ -414,16 +483,16 @@ sheet1 = sheets["Sheet1"]
 sheet2 = clean_sheet2(sheets["Sheet2"])
 
 # ============================
-# 11. メニュー
+# 12. メニュー
 # ============================
 if "page" not in st.session_state:
     st.session_state.page = "Dashboard"
 
-menu = st.radio("メニュー", ["Dashboard", "Input", "List"], horizontal=True)
+menu = st.radio("メニュー", ["Dashboard", "Input", "List", "Graph"], horizontal=True)
 st.session_state.page = menu
 
 # ============================
-# 12. ページ切り替え
+# 13. ページ切り替え
 # ============================
 if st.session_state.page == "Dashboard":
     dashboard_page(sheet1, sheet2)
@@ -434,3 +503,5 @@ elif st.session_state.page == "Input":
 elif st.session_state.page == "List":
     list_page(sheet2)
 
+elif st.session_state.page == "Graph":
+    graph_page(sheet1, sheet2)
